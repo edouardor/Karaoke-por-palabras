@@ -61,15 +61,6 @@
           "velocity": 0.7244094488188977
         },
         {
-          "duration": 0.1395833333333334,
-          "durationTicks": 134,
-          "midi": 48,
-          "name": "C3",
-          "ticks": 1929,
-          "time": 2.009375,
-          "velocity": 0.41732283464566927
-        },
-        {
           "duration": 1.010416666666667,
           "durationTicks": 970,
           "midi": 48,
