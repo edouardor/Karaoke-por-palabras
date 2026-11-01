@@ -1,0 +1,21 @@
+{
+  "titulo": "No la debemos dormir",
+  "lineas": [
+    {
+      "linea_completa": "No la de-be-mos dor-mir,",
+      "silabas": ["No", "la", "de", "be", "mos", "dor", "mir"]
+    },
+    {
+      "linea_completa": "La no-che san-ta,",
+      "silabas": ["La", "no", "che", "san", "ta"]
+    },
+    {
+      "linea_completa": "No la de-be-mos dor-mir,",
+      "silabas": ["No", "la", "de", "be", "mos", "dor", "mir"]
+    },
+    {
+      "linea_completa": "No la de-be-mos dor-mir.",
+      "silabas": ["No", "la", "de", "be", "mos", "dor", "mir"]
+    }
+  ]
+}
