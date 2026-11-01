@@ -1,0 +1,22 @@
+{
+    "titulo": "Adeste Fideles",
+    "lineas": [
+      {
+        "linea_completa": "A-des-te, fi-de-les, lae-ti, tri-um-phan-tes,",
+        "silabas": ["A", "des", "te", "fi", "de", "les", "lae", "ti", "tri", "um", "phan", "tes"]
+      },
+      {
+        "linea_completa": "Ve-ni-te, ve-ni-i-te in Beth-le-hem:",
+        "silabas": ["Ve", "ni", "te", "ve", "ni", "i", "te", "in", "Beth", "le", "hem"]
+      },
+      {
+        "linea_completa": "Na-tum vi-de-te Re-gem An-ge-lo-rum:",
+        "silabas": ["Na", "tum", "vi", "de", "te", "Re", "gem", "An", "ge", "lo", "rum"]
+      },
+      {
+        "linea_completa": "Ve-ni-te a-do-re-e-mu-us Do-mi-num.",
+        "silabas": ["Ve", "ni", "te", "a", "do", "re", "e", "mu", "us", "Do", "mi", "num"]
+      }
+    ]
+  }
+  
