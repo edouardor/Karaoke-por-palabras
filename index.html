@@ -136,7 +136,7 @@
 
         <div class="control-dificultad">
             <label style="color:#eee; font-size:15px; font-weight:600;">Exigencia de Afinación: <span id="txt-dificultad" style="color:#00b0ff;">Coral (±30 cents)</span></label>
-            <input type="range" id="selector-dificultad" min="15" max="60" value="30" step="15" oninput="actualizarTextoDificultad(this.value)">
+            <input type="range" id="selector-dificultad" min="15" max="60" value="45" step="15" oninput="actualizarTextoDificultad(this.value)">
             <div class="etiquetas-rango">
                 <span>Profesional</span>
                 <span>Coral</span>
@@ -177,7 +177,7 @@ let muestrasConsecutivasBien = 0;
 const MUESTRAS_NECESARIAS = 3; 
 let reproduciendoGuia = false;
 let ultimaNotaValidadaTexto = "";
-let toleranciaCentsConfigurada = 30; // Rango base elástico
+let toleranciaCentsConfigurada = 45; // Rango base elástico
 
 function actualizarTextoDificultad(valor) {
     const txt = document.getElementById('txt-dificultad');
