@@ -360,6 +360,15 @@ function cargarNuevaFrasePalabra() {
         cajaNota.className = `nota-caja ${idx === 0 ? 'activa' : ''}`;
         cajaNota.id = `caja-nota-${idx}`;
         cajaNota.innerText = notaEspanol;
+        cajaNota.style.cursor = "pointer"; // Indica que se puede pulsar
+        
+        // --- NUEVO: EVENTO CLICK PARA ESCUCHAR LA NOTA INDIVIDUAL ---
+        cajaNota.onclick = () => {
+            // Solo permitimos escuchar si el juego no está tocando la guía automática
+            if (!reproduciendoGuia) {
+                tocarNotaIndividualUsuario(notaIngles, cajaNota);
+            }
+        };
         
         let anchoCalculado = 45 + (duracionNota * 60); 
         cajaNota.style.width = `${anchoCalculado}px`;
@@ -408,14 +417,12 @@ function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota) {
     const nombreNotaIngles = listaNotas[indiceNota];
     const duracionOriginal = listaDuraciones[indiceNota] || 0.4;
     
-    // --- NUEVO MOTOR ACÚSTICO: SÍNTESIS DE DOBLE ARMÓNICO (POTENCIA MÓVIL) ---
-    // Creamos dos osciladores independientes para ganarle al compresor de volumen del teléfono
     const osciladorBase = audioContext.createOscillator();
     const osciladorHarmonico = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
     
-    osciladorBase.type = 'sine';       // Nota fundamental suave y redonda
-    osciladorHarmonico.type = 'sine';  // Nota de brillo armónico superior
+    osciladorBase.type = 'sine';       
+    osciladorHarmonico.type = 'sine';  
     
     let notaLetra = nombreNotaIngles.replace(/[0-9]/g, '').trim().toUpperCase();
     let numeroOctava = parseInt(nombreNotaIngles.replace(/[^0-9]/g, '')) || 4;
@@ -429,22 +436,17 @@ function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota) {
     let hzBase = FRECUENCIAS_BASE_OCTAVA_0[notaLetra] || 18.35; 
     let frecuenciaCalculada = hzBase * Math.pow(2, numeroOctava);
     
-    // Configuración del tono base
     osciladorBase.frequency.value = frecuenciaCalculada;
-    // Configuración del armónico (exactamente una octava más arriba multiplicando por 2)
     osciladorHarmonico.frequency.value = frecuenciaCalculada * 2;
     
-    // Volumen de salida sumado y maximizado de forma segura
-    gainNode.gain.setValueAtTime(0.50, audioContext.currentTime);
-    gainNode.gain.setValueAtTime(0.50, audioContext.currentTime + duracionOriginal - 0.08);
+    gainNode.gain.setValueAtTime(0.30, audioContext.currentTime);
+    gainNode.gain.setValueAtTime(0.30, audioContext.currentTime + duracionOriginal - 0.08);
     gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + duracionOriginal);
     
-    // Conectamos ambos osciladores al nodo de volumen común
     osciladorBase.connect(gainNode);
     osciladorHarmonico.connect(gainNode);
     gainNode.connect(audioContext.destination);
     
-    // Arrancamos y paramos ambos flujos a la vez
     osciladorBase.start();
     osciladorHarmonico.start();
     osciladorBase.stop(audioContext.currentTime + duracionOriginal);
@@ -453,6 +455,63 @@ function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota) {
     setTimeout(() => {
         reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota + 1);
     }, duracionOriginal * 1000);
+}
+
+// --- NUEVA FUNCIÓN: REPRODUCIR NOTA INDIVIDUAL PROTEGIENDO EL MICROFONO ---
+function tocarNotaIndividualUsuario(nombreNotaIngles, elementoCaja) {
+    // 1. ESCUDO DE ENTRADA: Activamos el bloqueo global para pausar la lectura del micro
+    reproduciendoGuia = true;
+    
+    // Guardamos el estilo visual anterior
+    const claseOriginal = elementoCaja.className;
+    // Iluminamos intensamente con el diseño azul brillante activo
+    elementoCaja.className = "nota-caja activa";
+    elementoCaja.style.boxShadow = "0 0 20px #00b0ff";
+
+    const oscBase = audioContext.createOscillator();
+    const oscHarm = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
+    oscBase.type = 'sine';
+    oscHarm.type = 'sine';
+
+    let notaLetra = nombreNotaIngles.replace(/[0-9]/g, '').trim().toUpperCase();
+    let numeroOctava = parseInt(nombreNotaIngles.replace(/[^0-9]/g, '')) || 4;
+
+    if (notaLetra === "DB") notaLetra = "C#";
+    if (notaLetra === "EB") notaLetra = "D#";
+    if (notaLetra === "GB") notaLetra = "F#";
+    if (notaLetra === "AB") notaLetra = "G#";
+    if (notaLetra === "BB") notaLetra = "A#";
+
+    let hzBase = FRECUENCIAS_BASE_OCTAVA_0[notaLetra] || 18.35;
+    let frecuenciaCalculada = hzBase * Math.pow(2, numeroOctava);
+
+    oscBase.frequency.value = frecuenciaCalculada;
+    oscHarm.frequency.value = frecuenciaCalculada * 2; // Armónico potente
+
+    // Fijamos la duración estricta a 1 segundo
+    gainNode.gain.setValueAtTime(0.35, audioContext.currentTime);
+    gainNode.gain.setValueAtTime(0.35, audioContext.currentTime + 0.85);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 1.0);
+
+    oscBase.connect(gainNode);
+    oscHarm.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
+    oscBase.start();
+    oscHarm.start();
+    oscBase.stop(audioContext.currentTime + 1.0);
+    oscHarm.stop(audioContext.currentTime + 1.0);
+
+    // 2. APAGADO AUTOMÁTICO AL CABO DE 1 SEGUNDO
+    setTimeout(() => {
+        // Devolvemos la caja a su color original
+        elementoCaja.className = claseOriginal;
+        elementoCaja.style.boxShadow = "none";
+        // Abrimos el escudo: El micrófono se reactiva al instante de forma segura
+        reproduciendoGuia = false;
+    }, 1000);
 }
 
 function bucleDeAudio() {
