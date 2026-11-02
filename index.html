@@ -408,10 +408,14 @@ function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota) {
     const nombreNotaIngles = listaNotas[indiceNota];
     const duracionOriginal = listaDuraciones[indiceNota] || 0.4;
     
-    const oscilador = audioContext.createOscillator();
+    // --- NUEVO MOTOR ACÚSTICO: SÍNTESIS DE DOBLE ARMÓNICO (POTENCIA MÓVIL) ---
+    // Creamos dos osciladores independientes para ganarle al compresor de volumen del teléfono
+    const osciladorBase = audioContext.createOscillator();
+    const osciladorHarmonico = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
     
-    oscilador.type = 'triangle';
+    osciladorBase.type = 'sine';       // Nota fundamental suave y redonda
+    osciladorHarmonico.type = 'sine';  // Nota de brillo armónico superior
     
     let notaLetra = nombreNotaIngles.replace(/[0-9]/g, '').trim().toUpperCase();
     let numeroOctava = parseInt(nombreNotaIngles.replace(/[^0-9]/g, '')) || 4;
@@ -425,17 +429,26 @@ function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota) {
     let hzBase = FRECUENCIAS_BASE_OCTAVA_0[notaLetra] || 18.35; 
     let frecuenciaCalculada = hzBase * Math.pow(2, numeroOctava);
     
-    oscilador.frequency.value = frecuenciaCalculada;
+    // Configuración del tono base
+    osciladorBase.frequency.value = frecuenciaCalculada;
+    // Configuración del armónico (exactamente una octava más arriba multiplicando por 2)
+    osciladorHarmonico.frequency.value = frecuenciaCalculada * 2;
     
-    gainNode.gain.setValueAtTime(0.30, audioContext.currentTime);
-    gainNode.gain.setValueAtTime(0.30, audioContext.currentTime + duracionOriginal - 0.1);
+    // Volumen de salida sumado y maximizado de forma segura
+    gainNode.gain.setValueAtTime(0.50, audioContext.currentTime);
+    gainNode.gain.setValueAtTime(0.50, audioContext.currentTime + duracionOriginal - 0.08);
     gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + duracionOriginal);
     
-    oscilador.connect(gainNode);
+    // Conectamos ambos osciladores al nodo de volumen común
+    osciladorBase.connect(gainNode);
+    osciladorHarmonico.connect(gainNode);
     gainNode.connect(audioContext.destination);
     
-    oscilador.start();
-    oscilador.stop(audioContext.currentTime + duracionOriginal);
+    // Arrancamos y paramos ambos flujos a la vez
+    osciladorBase.start();
+    osciladorHarmonico.start();
+    osciladorBase.stop(audioContext.currentTime + duracionOriginal);
+    osciladorHarmonico.stop(audioContext.currentTime + duracionOriginal);
     
     setTimeout(() => {
         reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota + 1);
