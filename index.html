@@ -37,6 +37,13 @@
             transition: transform 0.2s;
         }
         button:hover { transform: scale(1.05); }
+        .btn-volver {
+            background: #00b0ff;
+            color: #ffffff;
+            margin-top: 25px;
+            padding: 12px 25px;
+            font-size: 16px;
+        }
         .status-box {
             margin-top: 30px;
             font-size: 22px;
@@ -54,7 +61,6 @@
         .nota-caja.demasiado-baja { border-color: #ff5252; color: #ff5252; background: rgba(255,82,82,0.2); } 
         .nota-caja.demasiado-alta { border-color: #ffd740; color: #ffd740; background: rgba(255,215,64,0.2); } 
         
-        /* === MEDIDOR DE AFINACIÓN CORREGIDO (COMENTARIOS LIMPIOS) === */
         .contenedor-medidor {
             position: relative;
             width: 80%;
@@ -99,11 +105,13 @@
     <h2>🎵 Karaoke Adaptativo por Palabras</h2>
     <p><strong>Coro Canticorum Bajos</strong></p>
     
-    <label for="selector-cancion" style="display:block; margin-bottom:10px; color:#aaa;">Elige una pieza para ensayar:</label>
-    <select id="selector-cancion" style="background:#2a2a30; color:#fff; border:2px solid #444; padding:10px; border-radius:8px; margin-bottom:20px; font-size:16px; width:100%;">
-        <option value="Adeste">Adeste Fideles</option>
-        <option value="No la debemos dormir">No la debemos dormir</option>
-    </select>
+    <div id="zona-seleccion">
+        <label for="selector-cancion" style="display:block; margin-bottom:10px; color:#aaa;">Elige una pieza para ensayar:</label>
+        <select id="selector-cancion" style="background:#2a2a30; color:#fff; border:2px solid #444; padding:10px; border-radius:8px; margin-bottom:20px; font-size:16px; width:100%;">
+            <option value="Adeste">Adeste Fideles</option>
+            <option value="No la debemos dormir">No la debemos dormir</option>
+        </select>
+    </div>
 
     <button id="btn-comenzar" onclick="iniciarApp()">Comenzar Entrenamiento</button>
     
@@ -121,6 +129,10 @@
         </div>
 
         <div id="evaluacion" style="margin-top: 15px; font-weight: bold; font-size: 18px; min-height: 25px;"></div>
+        
+        <div id="zona-reinicio" style="display: none;">
+            <button class="btn-volver" onclick="regresarAlMenu()">⬅️ Volver a Selección</button>
+        </div>
     </div>
 </div>
 
@@ -182,12 +194,19 @@ function autoCorrelacion(buffer, sampleRate) {
     if (a) T0 = T0 - b / (2 * a);
     return sampleRate / T0;
 }
+
 async function iniciarApp() {
     try {
+        FRASES_JUEGO = [];
+        fraseActualIndex = 0;
+        notaSecuenciaIndex = 0;
+        muestrasConsecutivasBien = 0;
+        ultimaNotaValidadaTexto = "";
+
         const cancionSeleccionada = document.getElementById('selector-cancion').value;
         document.getElementById('btn-comenzar').style.display = 'none';
-        document.getElementById('selector-cancion').style.display = 'none';
-        document.querySelector('label[for="selector-cancion"]').style.display = 'none';
+        document.getElementById('zona-seleccion').style.display = 'none';
+        document.getElementById('zona-reinicio').style.display = 'none';
         document.getElementById('status-box').style.display = 'block';
 
         const [resNotas, resTexto] = await Promise.all([
@@ -267,16 +286,24 @@ async function iniciarApp() {
             });
         });
 
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        source = audioContext.createMediaStreamSource(stream);
+        // --- SISTEMA DE ACTIVACIÓN Y DESBLOQUEO DEL MICRÓFONO ---
+        if (!audioContext) {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            source = audioContext.createMediaStreamSource(stream);
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 2048;
+            dataArray = new Float32Array(analyser.fftSize);
+            source.connect(analyser);
+        }
         
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 2048;
-        dataArray = new Float32Array(analyser.fftSize);
-        source.connect(analyser);
+        // Despierta de forma obligatoria el flujo del micrófono por si el navegador lo durmió
+        if (audioContext.state === 'suspended') {
+            await audioContext.resume();
+        }
         
         cargarNuevaFrasePalabra();
+        // --- CORRECCIÓN CLAVE: Encendemos el bucle que lee el micrófono en tiempo real ---
         bucleDeAudio();
 
     } catch (err) {
@@ -284,8 +311,16 @@ async function iniciarApp() {
         document.getElementById('evaluacion').innerHTML = `<span class='error'>❌ Error: ${err.message}</span>`;
     }
 }
+
 function cargarNuevaFrasePalabra() {
-    if (fraseActualIndex >= FRASES_JUEGO.length) return;
+    if (fraseActualIndex >= FRASES_JUEGO.length) {
+        document.getElementById('palabra-pantalla').innerText = "🎉 ¡COMPLETADO!";
+        document.getElementById('secuencia-visual').innerHTML = "";
+        document.getElementById('grafico-afinador').style.display = "none";
+        document.getElementById('evaluacion').innerHTML = "<span class='success'>¡Felicidades, cantaste todas las palabras correctamente!</span>";
+        document.getElementById('zona-reinicio').style.display = "block";
+        return;
+    }
     
     notaSecuenciaIndex = 0;
     muestrasConsecutivasBien = 0;
@@ -297,8 +332,7 @@ function cargarNuevaFrasePalabra() {
     let contenedorVisual = document.getElementById('secuencia-visual');
     contenedorVisual.innerHTML = "";
     
-    // CORRECCIÓN: Agregamos [0] para extraer el texto de la primera nota (ej: "D4") de la lista
-    let primeraNotaIngles = datosFrase.notesIngles[0]; 
+    let primeraNotaIngles = datosFrase.notesIngles[0];
     let letraPrimera = primeraNotaIngles.replace(/[0-9]/g, '').trim().toUpperCase();
     let octavaPrimera = parseInt(primeraNotaIngles.replace(/[^0-9]/g, '')) || 4;
     
@@ -365,6 +399,7 @@ function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota) {
         setTimeout(() => { 
             reproduciendoGuia = false; 
             document.getElementById('grafico-afinador').style.visibility = "visible";
+            document.getElementById('grafico-afinador').style.display = "flex";
         }, 300);
         return;
     }
@@ -392,8 +427,8 @@ function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota) {
     
     oscilador.frequency.value = frecuenciaCalculada;
     
-    gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
-    gainNode.gain.setValueAtTime(0.15, audioContext.currentTime + duracionOriginal - 0.1);
+    gainNode.gain.setValueAtTime(0.30, audioContext.currentTime);
+    gainNode.gain.setValueAtTime(0.30, audioContext.currentTime + duracionOriginal - 0.1);
     gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + duracionOriginal);
     
     oscilador.connect(gainNode);
@@ -406,16 +441,13 @@ function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota) {
         reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota + 1);
     }, duracionOriginal * 1000);
 }
+
 function bucleDeAudio() {
     requestAnimationFrame(bucleDeAudio);
     if (reproduciendoGuia) return;
 
     if (fraseActualIndex >= FRASES_JUEGO.length) {
-        document.getElementById('palabra-pantalla').innerText = "🎉 ¡COMPLETADO!";
-        document.getElementById('secuencia-visual').innerHTML = "";
-        document.getElementById('grafico-afinador').style.display = "none";
-        document.getElementById('evaluacion').innerHTML = "<span class='success'>¡Felicidades, cantaste todas las palabras correctamente!</span>";
-        return;
+        return; 
     }
 
     const datosFraseActual = FRASES_JUEGO[fraseActualIndex];
@@ -467,16 +499,14 @@ function bucleDeAudio() {
         if (desviacionCents > 50) desviacionCents = 50;
         if (desviacionCents < -50) desviacionCents = -50;
 
-        // Amortiguamos la sensibilidad física a 0.4 para que la aguja sea muy estable
         let porcentajePosicion = 50 + (desviacionCents * 0.4); 
         if (porcentajePosicion > 96) porcentajePosicion = 96;
-        if (porcentajePosicion < 4) pointerporcentajePosicion = 4;
+        if (porcentajePosicion < 4) porcentajePosicion = 4;
         
         if (aguja) aguja.style.left = `${porcentajePosicion}%`;
 
         let cajaActiva = document.getElementById(`caja-nota-${notaSecuenciaIndex}`);
 
-        // TOLERANCIA AMPLIADA A +/- 30 CENTS (Margen coral natural y cómodo)
         if (distanciaCromatica === 0 && Math.abs(desviacionCents) <= 30) {
             muestrasConsecutivasBien++;
             if (muestrasConsecutivasBien >= MUESTRAS_NECESARIAS) {
@@ -519,6 +549,18 @@ function bucleDeAudio() {
             document.getElementById('evaluacion').innerText = ""; 
         }
     }
+}
+
+function regresarAlMenu() {
+    // Función nueva para limpiar el escenario y restablecer la vista inicial del menú
+    document.getElementById('status-box').style.display = "none";
+    document.getElementById('evaluacion').innerHTML = "";
+    document.getElementById('secuencia-visual').innerHTML = "";
+    document.getElementById('palabra-pantalla').innerText = "...";
+    
+    document.getElementById('zona-seleccion').style.display = "block";
+    document.getElementById('btn-comenzar').style.display = "inline-block";
+    document.getElementById('grafico-afinador').style.display = "none";
 }
 </script>
 </body>
