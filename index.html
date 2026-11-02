@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Frases Karaoke - Adeste</title>
+    <title>Frases Karaoke - Coro Canticorum</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -43,20 +43,51 @@
             min-height: 180px;
         }
         .palabra-actual { color: #ffeb3b; font-size: 42px; font-weight: bold; display: block; margin-bottom: 25px; text-shadow: 0 0 15px rgba(255,235,59,0.4); }
-        .secuencia-cajas { display: flex; justify-content: center; align-items: flex-end; gap: 12px; margin: 25px 0; min-height: 150px; }
+        .secuencia-cajas { display: flex; justify-content: center; align-items: flex-end; gap: 12px; margin: 25px 0; min-height: 120px; }
         
-        /* CONTENEDOR DE CADA BLOQUE (SÍLABA + CAJA) */
         .nota-bloque { display: flex; flex-direction: column; align-items: center; transition: all 0.15s ease; }
-        
-        /* ESTILO DE LA SÍLABA SUPERIOR */
         .caja-silaba { font-size: 16px; font-weight: 600; color: #ffeb3b; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; min-height: 20px; }
         
-        /* ESTADOS DE LAS CAJAS DE NOTAS */
         .nota-caja { background: #2a2a30; padding: 8px 0; border-radius: 8px; border: 2px solid #444; font-size: 15px; font-weight: bold; color: #aaa; transition: all 0.15s ease; }
         .nota-caja.activa { border-color: #00b0ff; color: #00b0ff; background: rgba(0,176,255,0.1); box-shadow: 0 0 10px rgba(0,176,255,0.2); }
         .nota-caja.completada { border-color: #00e676; color: #00e676; background: rgba(0,230,118,0.2); }
         .nota-caja.demasiado-baja { border-color: #ff5252; color: #ff5252; background: rgba(255,82,82,0.2); } 
         .nota-caja.demasiado-alta { border-color: #ffd740; color: #ffd740; background: rgba(255,215,64,0.2); } 
+        
+        /* === MEDIDOR DE AFINACIÓN CORREGIDO (COMENTARIOS LIMPIOS) === */
+        .contenedor-medidor {
+            position: relative;
+            width: 80%;
+            max-width: 350px;
+            height: 30px;
+            margin: 25px auto 10px auto;
+            display: flex;
+            align-items: center;
+        }
+        .barra-medidor {
+            display: flex;
+            width: 100%;
+            height: 4px;
+            border-radius: 2px;
+            overflow: visible;
+        }
+        .zona-baja { flex: 45; background-color: #ff5252; }    
+        .zona-afinada { flex: 10; background-color: #00e676; } 
+        .zona-alta { flex: 45; background-color: #ffd740; }    
+        
+        .marcador-aguja {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            border: 3px solid #1a1a1e;
+            outline: 3px solid #00b0ff; 
+            background-color: transparent;
+            border-radius: 50%;
+            left: 50%; 
+            transform: translate(-50%, 0);
+            transition: left 0.12s ease-out;
+            box-shadow: 0 0 8px rgba(0,176,255,0.4);
+        }
         
         .success { color: #00e676; font-weight: bold; }
         .error { color: #ff5252; }
@@ -67,22 +98,29 @@
 <div class="container">
     <h2>🎵 Karaoke Adaptativo por Palabras</h2>
     <p><strong>Coro Canticorum Bajos</strong></p>
-    <label for="selector-cancion" style="display:block; margin-bottom:10px; color:#aaa;">Elige una canción:</label>
-<select id="selector-cancion" style="background:#2a2a30; color:#fff; border:2px solid #444; padding:10px; border-radius:8px; margin-bottom:20px; font-size:16px; width:100%;">
-    <!-- El valor ('value') debe coincidir exactamente con el nombre de tus archivos sin el .json -->
-    <option value="Adeste">Adeste Fideles</option>
-    <option value="No la debemos dormir">No la debemos dormir</option>
-
-    <!-- <option value="Cumpleanos"></option>-->
-</select>
+    
+    <label for="selector-cancion" style="display:block; margin-bottom:10px; color:#aaa;">Elige una pieza para ensayar:</label>
+    <select id="selector-cancion" style="background:#2a2a30; color:#fff; border:2px solid #444; padding:10px; border-radius:8px; margin-bottom:20px; font-size:16px; width:100%;">
+        <option value="Adeste">Adeste Fideles</option>
+        <option value="No la debemos dormir">No la debemos dormir</option>
+    </select>
 
     <button id="btn-comenzar" onclick="iniciarApp()">Comenzar Entrenamiento</button>
     
     <div class="status-box" id="status-box" style="display: none;">
         <div id="palabra-pantalla" class="palabra-actual">...</div>
         <div id="secuencia-visual" class="secuencia-cajas"></div>
-        <div style="margin-top: 15px; font-size: 18px; color: #aaa;">Tu voz detectada: <span id="nota-usuario" style="color:#fff; font-weight:bold;">...</span></div>
-        <div id="evaluacion" style="margin-top: 15px; font-weight: bold; font-size: 18px;"></div>
+        
+        <div class="contenedor-medidor" id="grafico-afinador" style="visibility: hidden;">
+            <div class="barra-medidor">
+                <div class="zona-baja"></div>
+                <div class="zona-afinada"></div>
+                <div class="zona-alta"></div>
+            </div>
+            <div class="marcador-aguja" id="aguja-marcador"></div>
+        </div>
+
+        <div id="evaluacion" style="margin-top: 15px; font-weight: bold; font-size: 18px; min-height: 25px;"></div>
     </div>
 </div>
 
@@ -146,22 +184,16 @@ function autoCorrelacion(buffer, sampleRate) {
 }
 async function iniciarApp() {
     try {
-        // Obtenemos cuál canción seleccionó el usuario en el menú desplegable
         const cancionSeleccionada = document.getElementById('selector-cancion').value;
-
         document.getElementById('btn-comenzar').style.display = 'none';
-        document.getElementById('selector-cancion').style.display = 'none'; // Ocultamos el menú al empezar
+        document.getElementById('selector-cancion').style.display = 'none';
         document.querySelector('label[for="selector-cancion"]').style.display = 'none';
         document.getElementById('status-box').style.display = 'block';
 
-        // CARGA DINÁMICA: Ahora busca los archivos según la opción elegida
         const [resNotas, resTexto] = await Promise.all([
             fetch(`./canciones/${cancionSeleccionada}.json`),
             fetch(`./canciones/${cancionSeleccionada} txt.json`) 
         ]);
-        
-        // ... (todo el resto de tu código de iniciarApp se queda exactamente igual)
-
 
         if (!resNotas.ok || !resTexto.ok) throw new Error("Archivos JSON no encontrados.");
 
@@ -169,7 +201,6 @@ async function iniciarApp() {
         let datosTexto = await resTexto.json();
 
         if (datosTexto.default) datosTexto = datosTexto.default;
-        // if (datosTexto.titulo) document.getElementById('cancion-Titulo').innerText = datosTexto.titulo;
 
         let lineasLetra = [];
         if (datosTexto.lineas && Array.isArray(datosTexto.lineas)) {
@@ -178,10 +209,7 @@ async function iniciarApp() {
             lineasLetra = datosTexto;
         } else {
             for (let clave in datosTexto) {
-                if (Array.isArray(datosTexto[clave])) {
-                    lineasLetra = datosTexto[clave];
-                    break;
-                }
+                if (Array.isArray(datosTexto[clave])) { lineasLetra = datosTexto[clave]; break; }
             }
         }
 
@@ -194,7 +222,7 @@ async function iniciarApp() {
         let notasListaCompleta = notasRaw.map(n => {
             let nombre = (typeof n === 'string') ? n : (n.name || n.note || n.pitch || "");
             let duracion = (typeof n === 'object' && n.duration) ? n.duration : 0.4;
-            let notaLimpia = name = nombre.replace(/[0-9]/g, '').trim();
+            let notaLimpia = nombre.replace(/[0-9]/g, '').trim();
             const traducciones = {"C": "Do", "D": "Re", "E": "Mi", "F": "Fa", "G": "Sol", "A": "La", "B": "Si"};
             let notaBase = notaLimpia.charAt(0).toUpperCase() + notaLimpia.slice(1);
             return {
@@ -206,9 +234,7 @@ async function iniciarApp() {
         let notasContador = 0;
         lineasLetra.forEach(linea => {
             if (!linea.linea_completa) return;
-            
             let palabrasFrase = linea.linea_completa.split(/\s+/);
-            
             palabrasFrase.forEach(palBase => {
                 let palabraLimpia = palBase.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
                 let numeroSilabas = (palBase.match(/-/g) || []).length + 1;
@@ -241,8 +267,6 @@ async function iniciarApp() {
             });
         });
 
-        if (FRASES_JUEGO.length === 0) throw new Error("No se pudieron emparejar las palabras con las notas.");
-
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         source = audioContext.createMediaStreamSource(stream);
@@ -258,7 +282,6 @@ async function iniciarApp() {
     } catch (err) {
         document.getElementById('palabra-pantalla').innerText = "Error";
         document.getElementById('evaluacion').innerHTML = `<span class='error'>❌ Error: ${err.message}</span>`;
-        console.error(err);
     }
 }
 function cargarNuevaFrasePalabra() {
@@ -274,7 +297,8 @@ function cargarNuevaFrasePalabra() {
     let contenedorVisual = document.getElementById('secuencia-visual');
     contenedorVisual.innerHTML = "";
     
-    let primeraNotaIngles = datosFrase.notesIngles[0];
+    // CORRECCIÓN: Agregamos [0] para extraer el texto de la primera nota (ej: "D4") de la lista
+    let primeraNotaIngles = datosFrase.notesIngles[0]; 
     let letraPrimera = primeraNotaIngles.replace(/[0-9]/g, '').trim().toUpperCase();
     let octavaPrimera = parseInt(primeraNotaIngles.replace(/[^0-9]/g, '')) || 4;
     
@@ -332,12 +356,16 @@ function cargarNuevaFrasePalabra() {
         contenedorVisual.appendChild(bloque);
     });
 
+    document.getElementById('grafico-afinador').style.visibility = "hidden";
     reproducirCadenaNotasGuia(datosFrase.notesIngles, datosFrase.duraciones, 0);
 }
 
 function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota) {
     if (indiceNota >= listaNotas.length) {
-        setTimeout(() => { reproduciendoGuia = false; }, 300);
+        setTimeout(() => { 
+            reproduciendoGuia = false; 
+            document.getElementById('grafico-afinador').style.visibility = "visible";
+        }, 300);
         return;
     }
     
@@ -378,7 +406,6 @@ function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota) {
         reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota + 1);
     }, duracionOriginal * 1000);
 }
-
 function bucleDeAudio() {
     requestAnimationFrame(bucleDeAudio);
     if (reproduciendoGuia) return;
@@ -386,7 +413,7 @@ function bucleDeAudio() {
     if (fraseActualIndex >= FRASES_JUEGO.length) {
         document.getElementById('palabra-pantalla').innerText = "🎉 ¡COMPLETADO!";
         document.getElementById('secuencia-visual').innerHTML = "";
-        document.getElementById('nota-usuario').innerText = "---";
+        document.getElementById('grafico-afinador').style.display = "none";
         document.getElementById('evaluacion').innerHTML = "<span class='success'>¡Felicidades, cantaste todas las palabras correctamente!</span>";
         return;
     }
@@ -398,9 +425,11 @@ function bucleDeAudio() {
     analyser.getFloatTimeDomainData(dataArray);
     const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
 
+    let aguja = document.getElementById('aguja-marcador');
+
     if (frecuencia === -1) {
-        document.getElementById('nota-usuario').innerText = "(Silencio)";
         ultimaNotaValidadaTexto = ""; 
+        if (aguja) aguja.style.left = "50%"; 
         return;
     }
 
@@ -408,7 +437,6 @@ function bucleDeAudio() {
         const valorMidiUsuario = 69 + 12 * Math.log2(frecuencia / 440);
         const idUsuarioCromatico = Math.round(valorMidiUsuario) % 12;
         const notaUsuarioTexto = hzANombreEspanol(frecuencia);
-        document.getElementById('nota-usuario').innerText = notaUsuarioTexto;
 
         if (notaUsuarioTexto === ultimaNotaValidadaTexto && notaSecuenciaIndex > 0 && datosFraseActual.notes[notaSecuenciaIndex - 1] === notaAInterpretar) {
             return;
@@ -433,9 +461,23 @@ function bucleDeAudio() {
         const hzBaseObjetivo = FRECUENCIAS_BASE_OCTAVA_0[letraIngles] || 18.35;
         const frecuenciaObjetivoExacta = hzBaseObjetivo * Math.pow(2, octavaObjetivo);
 
+        const midiObjetivoPerfecto = 69 + 12 * Math.log2(frecuenciaObjetivoExacta / 440);
+        let desviacionCents = (valorMidiUsuario - midiObjetivoPerfecto) * 100;
+
+        if (desviacionCents > 50) desviacionCents = 50;
+        if (desviacionCents < -50) desviacionCents = -50;
+
+        // Amortiguamos la sensibilidad física a 0.4 para que la aguja sea muy estable
+        let porcentajePosicion = 50 + (desviacionCents * 0.4); 
+        if (porcentajePosicion > 96) porcentajePosicion = 96;
+        if (porcentajePosicion < 4) pointerporcentajePosicion = 4;
+        
+        if (aguja) aguja.style.left = `${porcentajePosicion}%`;
+
         let cajaActiva = document.getElementById(`caja-nota-${notaSecuenciaIndex}`);
 
-        if (distanciaCromatica === 0) {
+        // TOLERANCIA AMPLIADA A +/- 30 CENTS (Margen coral natural y cómodo)
+        if (distanciaCromatica === 0 && Math.abs(desviacionCents) <= 30) {
             muestrasConsecutivasBien++;
             if (muestrasConsecutivasBien >= MUESTRAS_NECESARIAS) {
                 if (cajaActiva) {
@@ -466,10 +508,12 @@ function bucleDeAudio() {
             }
 
             if (cajaActiva) {
-                if (frecuencia < frecuenciaObjetivoExacta) {
+                if (desviacionCents < -30) {
                     cajaActiva.className = "nota-caja demasiado-baja"; 
-                } else {
+                } else if (desviacionCents > 30) {
                     cajaActiva.className = "nota-caja demasiado-alta"; 
+                } else {
+                    cajaActiva.className = "nota-caja activa"; 
                 }
             }
             document.getElementById('evaluacion').innerText = ""; 
