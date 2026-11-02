@@ -95,6 +95,28 @@
             box-shadow: 0 0 8px rgba(0,176,255,0.4);
         }
         
+        .control-dificultad {
+            margin: 20px 0 30px 0;
+            background: #222226;
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid #333;
+        }
+        .control-dificultad input[type=range] {
+            width: 100%;
+            margin-top: 10px;
+            accent-color: #00b0ff;
+            cursor: pointer;
+        }
+        .etiquetas-rango {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #aaa;
+            margin-top: 5px;
+            padding: 0 2px;
+        }
+        
         .success { color: #00e676; font-weight: bold; }
         .error { color: #ff5252; }
     </style>
@@ -107,10 +129,21 @@
     
     <div id="zona-seleccion">
         <label for="selector-cancion" style="display:block; margin-bottom:10px; color:#aaa;">Elige una pieza para ensayar:</label>
-        <select id="selector-cancion" style="background:#2a2a30; color:#fff; border:2px solid #444; padding:10px; border-radius:8px; margin-bottom:20px; font-size:16px; width:100%;">
+        <select id="selector-cancion" style="background:#2a2a30; color:#fff; border:2px solid #444; padding:10px; border-radius:8px; margin-bottom:15px; font-size:16px; width:100%;">
             <option value="Adeste">Adeste Fideles</option>
             <option value="No la debemos dormir">No la debemos dormir</option>
         </select>
+
+        <div class="control-dificultad">
+            <label style="color:#eee; font-size:15px; font-weight:600;">Exigencia de Afinación: <span id="txt-dificultad" style="color:#00b0ff;">Coral (±30 cents)</span></label>
+            <input type="range" id="selector-dificultad" min="15" max="60" value="30" step="15" oninput="actualizarTextoDificultad(this.value)">
+            <div class="etiquetas-rango">
+                <span>Profesional</span>
+                <span>Coral</span>
+                <span>Fácil</span>
+                <span>Muy Fácil</span>
+            </div>
+        </div>
     </div>
 
     <button id="btn-comenzar" onclick="iniciarApp()">Comenzar Entrenamiento</button>
@@ -144,6 +177,15 @@ let muestrasConsecutivasBien = 0;
 const MUESTRAS_NECESARIAS = 3; 
 let reproduciendoGuia = false;
 let ultimaNotaValidadaTexto = "";
+let toleranciaCentsConfigurada = 30; // Rango base elástico
+
+function actualizarTextoDificultad(valor) {
+    const txt = document.getElementById('txt-dificultad');
+    if(valor == "15") txt.innerHTML = "Profesional (±15 cents) 🎯";
+    if(valor == "30") txt.innerHTML = "Coral (±30 cents) 🎙️";
+    if(valor == "45") txt.innerHTML = "Fácil (±45 cents) ☕";
+    if(valor == "60") txt.innerHTML = "Iniciación / Muy Fácil (±60 cents) 👶";
+}
 
 let audioContext;
 let analyser;
@@ -194,7 +236,6 @@ function autoCorrelacion(buffer, sampleRate) {
     if (a) T0 = T0 - b / (2 * a);
     return sampleRate / T0;
 }
-
 async function iniciarApp() {
     try {
         FRASES_JUEGO = [];
@@ -202,6 +243,9 @@ async function iniciarApp() {
         notaSecuenciaIndex = 0;
         muestrasConsecutivasBien = 0;
         ultimaNotaValidadaTexto = "";
+
+        // --- NUEVO: Capturamos el valor de cents configurado por el usuario ---
+        toleranciaCentsConfigurada = parseInt(document.getElementById('selector-dificultad').value) || 30;
 
         const cancionSeleccionada = document.getElementById('selector-cancion').value;
         document.getElementById('btn-comenzar').style.display = 'none';
@@ -286,7 +330,6 @@ async function iniciarApp() {
             });
         });
 
-        // --- SISTEMA DE ACTIVACIÓN Y DESBLOQUEO DEL MICRÓFONO ---
         if (!audioContext) {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -297,13 +340,11 @@ async function iniciarApp() {
             source.connect(analyser);
         }
         
-        // Despierta de forma obligatoria el flujo del micrófono por si el navegador lo durmió
         if (audioContext.state === 'suspended') {
             await audioContext.resume();
         }
         
         cargarNuevaFrasePalabra();
-        // --- CORRECCIÓN CLAVE: Encendemos el bucle que lee el micrófono en tiempo real ---
         bucleDeAudio();
 
     } catch (err) {
@@ -311,7 +352,6 @@ async function iniciarApp() {
         document.getElementById('evaluacion').innerHTML = `<span class='error'>❌ Error: ${err.message}</span>`;
     }
 }
-
 function cargarNuevaFrasePalabra() {
     if (fraseActualIndex >= FRASES_JUEGO.length) {
         document.getElementById('palabra-pantalla').innerText = "🎉 ¡COMPLETADO!";
@@ -332,7 +372,7 @@ function cargarNuevaFrasePalabra() {
     let contenedorVisual = document.getElementById('secuencia-visual');
     contenedorVisual.innerHTML = "";
     
-    let primeraNotaIngles = datosFrase.notesIngles[0];
+    let primeraNotaIngles = datosFrase.notesIngles[0] || "D4";
     let letraPrimera = primeraNotaIngles.replace(/[0-9]/g, '').trim().toUpperCase();
     let octavaPrimera = parseInt(primeraNotaIngles.replace(/[^0-9]/g, '')) || 4;
     
@@ -360,11 +400,9 @@ function cargarNuevaFrasePalabra() {
         cajaNota.className = `nota-caja ${idx === 0 ? 'activa' : ''}`;
         cajaNota.id = `caja-nota-${idx}`;
         cajaNota.innerText = notaEspanol;
-        cajaNota.style.cursor = "pointer"; // Indica que se puede pulsar
+        cajaNota.style.cursor = "pointer";
         
-        // --- NUEVO: EVENTO CLICK PARA ESCUCHAR LA NOTA INDIVIDUAL ---
         cajaNota.onclick = () => {
-            // Solo permitimos escuchar si el juego no está tocando la guía automática
             if (!reproduciendoGuia) {
                 tocarNotaIndividualUsuario(notaIngles, cajaNota);
             }
@@ -457,14 +495,9 @@ function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota) {
     }, duracionOriginal * 1000);
 }
 
-// --- NUEVA FUNCIÓN: REPRODUCIR NOTA INDIVIDUAL PROTEGIENDO EL MICROFONO ---
 function tocarNotaIndividualUsuario(nombreNotaIngles, elementoCaja) {
-    // 1. ESCUDO DE ENTRADA: Activamos el bloqueo global para pausar la lectura del micro
     reproduciendoGuia = true;
-    
-    // Guardamos el estilo visual anterior
     const claseOriginal = elementoCaja.className;
-    // Iluminamos intensamente con el diseño azul brillante activo
     elementoCaja.className = "nota-caja activa";
     elementoCaja.style.boxShadow = "0 0 20px #00b0ff";
 
@@ -488,9 +521,8 @@ function tocarNotaIndividualUsuario(nombreNotaIngles, elementoCaja) {
     let frecuenciaCalculada = hzBase * Math.pow(2, numeroOctava);
 
     oscBase.frequency.value = frecuenciaCalculada;
-    oscHarm.frequency.value = frecuenciaCalculada * 2; // Armónico potente
+    oscHarm.frequency.value = frecuenciaCalculada * 2;
 
-    // Fijamos la duración estricta a 1 segundo
     gainNode.gain.setValueAtTime(0.35, audioContext.currentTime);
     gainNode.gain.setValueAtTime(0.35, audioContext.currentTime + 0.85);
     gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 1.0);
@@ -504,16 +536,12 @@ function tocarNotaIndividualUsuario(nombreNotaIngles, elementoCaja) {
     oscBase.stop(audioContext.currentTime + 1.0);
     oscHarm.stop(audioContext.currentTime + 1.0);
 
-    // 2. APAGADO AUTOMÁTICO AL CABO DE 1 SEGUNDO
     setTimeout(() => {
-        // Devolvemos la caja a su color original
         elementoCaja.className = claseOriginal;
         elementoCaja.style.boxShadow = "none";
-        // Abrimos el escudo: El micrófono se reactiva al instante de forma segura
         reproduciendoGuia = false;
     }, 1000);
 }
-
 function bucleDeAudio() {
     requestAnimationFrame(bucleDeAudio);
     if (reproduciendoGuia) return;
@@ -579,7 +607,8 @@ function bucleDeAudio() {
 
         let cajaActiva = document.getElementById(`caja-nota-${notaSecuenciaIndex}`);
 
-        if (distanciaCromatica === 0 && Math.abs(desviacionCents) <= 30) {
+        // --- ENTORNO ELÁSTICO: Validamos usando la tolerancia dinámica elegida ---
+        if (distanciaCromatica === 0 && Math.abs(desviacionCents) <= toleranciaCentsConfigurada) {
             muestrasConsecutivasBien++;
             if (muestrasConsecutivasBien >= MUESTRAS_NECESARIAS) {
                 if (cajaActiva) {
@@ -610,9 +639,9 @@ function bucleDeAudio() {
             }
 
             if (cajaActiva) {
-                if (desviacionCents < -30) {
+                if (desviacionCents < -toleranciaCentsConfigurada) {
                     cajaActiva.className = "nota-caja demasiado-baja"; 
-                } else if (desviacionCents > 30) {
+                } else if (desviacionCents > toleranciaCentsConfigurada) {
                     cajaActiva.className = "nota-caja demasiado-alta"; 
                 } else {
                     cajaActiva.className = "nota-caja activa"; 
@@ -624,7 +653,6 @@ function bucleDeAudio() {
 }
 
 function regresarAlMenu() {
-    // Función nueva para limpiar el escenario y restablecer la vista inicial del menú
     document.getElementById('status-box').style.display = "none";
     document.getElementById('evaluacion').innerHTML = "";
     document.getElementById('secuencia-visual').innerHTML = "";
