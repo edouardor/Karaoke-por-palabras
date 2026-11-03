@@ -37,86 +37,24 @@
             transition: transform 0.2s;
         }
         button:hover { transform: scale(1.05); }
-        .btn-volver {
-            background: #00b0ff;
-            color: #ffffff;
-            margin-top: 25px;
-            padding: 12px 25px;
-            font-size: 16px;
-        }
-        .status-box {
-            margin-top: 30px;
-            font-size: 22px;
-            min-height: 180px;
-        }
+        .btn-volver { background: #00b0ff; color: #ffffff; margin-top: 25px; padding: 12px 25px; font-size: 16px; }
+        .status-box { margin-top: 30px; font-size: 22px; min-height: 140px; }
         .palabra-actual { color: #ffeb3b; font-size: 42px; font-weight: bold; display: block; margin-bottom: 25px; text-shadow: 0 0 15px rgba(255,235,59,0.4); }
         .secuencia-cajas { display: flex; justify-content: center; align-items: flex-end; gap: 12px; margin: 25px 0; min-height: 120px; }
         
         .nota-bloque { display: flex; flex-direction: column; align-items: center; transition: all 0.15s ease; }
         .caja-silaba { font-size: 16px; font-weight: 600; color: #ffeb3b; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; min-height: 20px; }
         
+        /* ESTILOS DE LAS CAJAS SEGÚN DESVIACIÓN */
         .nota-caja { background: #2a2a30; padding: 8px 0; border-radius: 8px; border: 2px solid #444; font-size: 15px; font-weight: bold; color: #aaa; transition: all 0.15s ease; }
-        .nota-caja.activa { border-color: #00b0ff; color: #00b0ff; background: rgba(0,176,255,0.1); box-shadow: 0 0 10px rgba(0,176,255,0.2); }
+        .nota-caja.activa { border-color: #00b0ff; color: #00b0ff; background: rgba(0,176,255,0.1); }
         .nota-caja.completada { border-color: #00e676; color: #00e676; background: rgba(0,230,118,0.2); }
-        .nota-caja.demasiado-baja { border-color: #ff5252; color: #ff5252; background: rgba(255,82,82,0.2); } 
-        .nota-caja.demasiado-alta { border-color: #ffd740; color: #ffd740; background: rgba(255,215,64,0.2); } 
+        .nota-caja.umbral-amarillo { border-color: #ffd740; color: #ffd740; background: rgba(255,215,64,0.15); box-shadow: 0 0 8px rgba(255,215,64,0.2); } 
+        .nota-caja.umbral-rojo { border-color: #ff5252; color: #ff5252; background: rgba(255,82,82,0.15); box-shadow: 0 0 8px rgba(255,82,82,0.2); } 
         
-        .contenedor-medidor {
-            position: relative;
-            width: 80%;
-            max-width: 350px;
-            height: 30px;
-            margin: 25px auto 10px auto;
-            display: flex;
-            align-items: center;
-        }
-        .barra-medidor {
-            display: flex;
-            width: 100%;
-            height: 4px;
-            border-radius: 2px;
-            overflow: visible;
-        }
-        .zona-baja { flex: 45; background-color: #ff5252; }    
-        .zona-afinada { flex: 10; background-color: #00e676; } 
-        .zona-alta { flex: 45; background-color: #ffd740; }    
-        
-        .marcador-aguja {
-            position: absolute;
-            width: 14px;
-            height: 14px;
-            border: 3px solid #1a1a1e;
-            outline: 3px solid #00b0ff; 
-            background-color: transparent;
-            border-radius: 50%;
-            left: 50%; 
-            transform: translate(-50%, 0);
-            transition: left 0.12s ease-out;
-            box-shadow: 0 0 8px rgba(0,176,255,0.4);
-        }
-        
-        .control-dificultad {
-            margin: 20px 0 30px 0;
-            background: #222226;
-            padding: 15px;
-            border-radius: 12px;
-            border: 1px solid #333;
-        }
-        .control-dificultad input[type=range] {
-            width: 100%;
-            margin-top: 10px;
-            accent-color: #00b0ff;
-            cursor: pointer;
-        }
-        .etiquetas-rango {
-            display: flex;
-            justify-content: space-between;
-            font-size: 11px;
-            color: #aaa;
-            margin-top: 5px;
-            padding: 0 2px;
-        }
-        
+        .control-dificultad { margin: 20px 0 30px 0; background: #222226; padding: 15px; border-radius: 12px; border: 1px solid #333; }
+        .control-dificultad input[type=range] { width: 100%; margin-top: 10px; accent-color: #00b0ff; cursor: pointer; }
+        .etiquetas-rango { display: flex; justify-content: space-between; font-size: 11px; color: #aaa; margin-top: 5px; padding: 0 2px; }
         .success { color: #00e676; font-weight: bold; }
         .error { color: #ff5252; }
     </style>
@@ -135,7 +73,7 @@
         </select>
 
         <div class="control-dificultad">
-            <label style="color:#eee; font-size:15px; font-weight:600;">Exigencia de Afinación: <span id="txt-dificultad" style="color:#00b0ff;">Coral (±30 cents)</span></label>
+            <label style="color:#eee; font-size:15px; font-weight:600;">Exigencia de Afinación: <span id="txt-dificultad" style="color:#00b0ff;">Fácil (±45 cents) ☕</span></label>
             <input type="range" id="selector-dificultad" min="15" max="60" value="45" step="15" oninput="actualizarTextoDificultad(this.value)">
             <div class="etiquetas-rango">
                 <span>Profesional</span>
@@ -151,15 +89,6 @@
     <div class="status-box" id="status-box" style="display: none;">
         <div id="palabra-pantalla" class="palabra-actual">...</div>
         <div id="secuencia-visual" class="secuencia-cajas"></div>
-        
-        <div class="contenedor-medidor" id="grafico-afinador" style="visibility: hidden;">
-            <div class="barra-medidor">
-                <div class="zona-baja"></div>
-                <div class="zona-afinada"></div>
-                <div class="zona-alta"></div>
-            </div>
-            <div class="marcador-aguja" id="aguja-marcador"></div>
-        </div>
 
         <div id="evaluacion" style="margin-top: 15px; font-weight: bold; font-size: 18px; min-height: 25px;"></div>
         
@@ -177,7 +106,7 @@ let muestrasConsecutivasBien = 0;
 const MUESTRAS_NECESARIAS = 3; 
 let reproduciendoGuia = false;
 let ultimaNotaValidadaTexto = "";
-let toleranciaCentsConfigurada = 45; // Rango base elástico
+let toleranciaCentsConfigurada = 45; 
 
 function actualizarTextoDificultad(valor) {
     const txt = document.getElementById('txt-dificultad');
@@ -244,8 +173,7 @@ async function iniciarApp() {
         muestrasConsecutivasBien = 0;
         ultimaNotaValidadaTexto = "";
 
-        // --- NUEVO: Capturamos el valor de cents configurado por el usuario ---
-        toleranciaCentsConfigurada = parseInt(document.getElementById('selector-dificultad').value) || 30;
+        toleranciaCentsConfigurada = parseInt(document.getElementById('selector-dificultad').value) || 45;
 
         const cancionSeleccionada = document.getElementById('selector-cancion').value;
         document.getElementById('btn-comenzar').style.display = 'none';
@@ -356,7 +284,6 @@ function cargarNuevaFrasePalabra() {
     if (fraseActualIndex >= FRASES_JUEGO.length) {
         document.getElementById('palabra-pantalla').innerText = "🎉 ¡COMPLETADO!";
         document.getElementById('secuencia-visual').innerHTML = "";
-        document.getElementById('grafico-afinador').style.display = "none";
         document.getElementById('evaluacion').innerHTML = "<span class='success'>¡Felicidades, cantaste todas las palabras correctamente!</span>";
         document.getElementById('zona-reinicio').style.display = "block";
         return;
@@ -372,7 +299,8 @@ function cargarNuevaFrasePalabra() {
     let contenedorVisual = document.getElementById('secuencia-visual');
     contenedorVisual.innerHTML = "";
     
-    let primeraNotaIngles = datosFrase.notesIngles[0] || "D4";
+    // CORRECCIÓN CLAVE: Extraemos strictly la primera nota de texto (índice 0) de la lista
+    let primeraNotaIngles = (datosFrase.notesIngles && datosFrase.notesIngles.length > 0) ? datosFrase.notesIngles[0] : "D4";
     let letraPrimera = primeraNotaIngles.replace(/[0-9]/g, '').trim().toUpperCase();
     let octavaPrimera = parseInt(primeraNotaIngles.replace(/[^0-9]/g, '')) || 4;
     
@@ -437,7 +365,6 @@ function cargarNuevaFrasePalabra() {
         contenedorVisual.appendChild(bloque);
     });
 
-    document.getElementById('grafico-afinador').style.visibility = "hidden";
     reproducirCadenaNotasGuia(datosFrase.notesIngles, datosFrase.duraciones, 0);
 }
 
@@ -445,8 +372,6 @@ function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota) {
     if (indiceNota >= listaNotas.length) {
         setTimeout(() => { 
             reproduciendoGuia = false; 
-            document.getElementById('grafico-afinador').style.visibility = "visible";
-            document.getElementById('grafico-afinador').style.display = "flex";
         }, 300);
         return;
     }
@@ -499,7 +424,6 @@ function tocarNotaIndividualUsuario(nombreNotaIngles, elementoCaja) {
     reproduciendoGuia = true;
     const claseOriginal = elementoCaja.className;
     elementoCaja.className = "nota-caja activa";
-    elementoCaja.style.boxShadow = "0 0 20px #00b0ff";
 
     const oscBase = audioContext.createOscillator();
     const oscHarm = audioContext.createOscillator();
@@ -538,7 +462,6 @@ function tocarNotaIndividualUsuario(nombreNotaIngles, elementoCaja) {
 
     setTimeout(() => {
         elementoCaja.className = claseOriginal;
-        elementoCaja.style.boxShadow = "none";
         reproduciendoGuia = false;
     }, 1000);
 }
@@ -546,9 +469,7 @@ function bucleDeAudio() {
     requestAnimationFrame(bucleDeAudio);
     if (reproduciendoGuia) return;
 
-    if (fraseActualIndex >= FRASES_JUEGO.length) {
-        return; 
-    }
+    if (fraseActualIndex >= FRASES_JUEGO.length) return; 
 
     const datosFraseActual = FRASES_JUEGO[fraseActualIndex];
     const notaAInterpretar = datosFraseActual.notes[notaSecuenciaIndex];
@@ -557,11 +478,8 @@ function bucleDeAudio() {
     analyser.getFloatTimeDomainData(dataArray);
     const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
 
-    let aguja = document.getElementById('aguja-marcador');
-
     if (frecuencia === -1) {
         ultimaNotaValidadaTexto = ""; 
-        if (aguja) aguja.style.left = "50%"; 
         return;
     }
 
@@ -596,23 +514,24 @@ function bucleDeAudio() {
         const midiObjetivoPerfecto = 69 + 12 * Math.log2(frecuenciaObjetivoExacta / 440);
         let desviacionCents = (valorMidiUsuario - midiObjetivoPerfecto) * 100;
 
-        if (desviacionCents > 50) desviacionCents = 50;
-        if (desviacionCents < -50) desviacionCents = -50;
-
-        let porcentajePosicion = 50 + (desviacionCents * 0.4); 
-        if (porcentajePosicion > 96) porcentajePosicion = 96;
-        if (porcentajePosicion < 4) porcentajePosicion = 4;
-        
-        if (aguja) aguja.style.left = `${porcentajePosicion}%`;
+        if (distanciaCromatica > 0) {
+            if (desviacionCents > 0) desviacionCents = 150;
+            if (desviacionCents < 0) desviacionCents = -150;
+        }
 
         let cajaActiva = document.getElementById(`caja-nota-${notaSecuenciaIndex}`);
+        let absDesviacion = Math.abs(desviacionCents);
 
-        // --- ENTORNO ELÁSTICO: Validamos usando la tolerancia dinámica elegida ---
-        if (distanciaCromatica === 0 && Math.abs(desviacionCents) <= toleranciaCentsConfigurada) {
+        if (absDesviacion <= toleranciaCentsConfigurada) {
+            // AFINACIÓN CORRECTA (ZONA DE ESCUCHA ACTIVA)
             muestrasConsecutivasBien++;
+            if (cajaActiva) {
+                cajaActiva.className = "nota-caja activa"; 
+            }
+
             if (muestrasConsecutivasBien >= MUESTRAS_NECESARIAS) {
                 if (cajaActiva) {
-                    cajaActiva.className = "nota-caja completada";
+                    cajaActiva.className = "nota-caja completada"; 
                 }
                 
                 ultimaNotaValidadaTexto = notaUsuarioTexto;
@@ -633,18 +552,18 @@ function bucleDeAudio() {
                 }
             }
         } else {
+            // DESVIACIÓN DE AFINACIÓN fuera del rango elástico base
             muestrasConsecutivasBien = 0;
             if (notaUsuarioTexto !== "..." && notaUsuarioTexto !== ultimaNotaValidadaTexto) {
                 ultimaNotaValidadaTexto = "";
             }
 
             if (cajaActiva) {
-                if (desviacionCents < -toleranciaCentsConfigurada) {
-                    cajaActiva.className = "nota-caja demasiado-baja"; 
-                } else if (desviacionCents > toleranciaCentsConfigurada) {
-                    cajaActiva.className = "nota-caja demasiado-alta"; 
+                // --- CORRECCIÓN NUEVA: Expandimos la zona amarilla hasta x3 desviaciones ---
+                if (absDesviacion > (toleranciaCentsConfigurada * 3)) {
+                    cajaActiva.className = "nota-caja umbral-rojo";     // Más de 3 veces desfinado (Alerta)
                 } else {
-                    cajaActiva.className = "nota-caja activa"; 
+                    cajaActiva.className = "nota-caja umbral-amarillo"; // Entre 1 y 3 veces desafinado (Cerca)
                 }
             }
             document.getElementById('evaluacion').innerText = ""; 
@@ -660,7 +579,16 @@ function regresarAlMenu() {
     
     document.getElementById('zona-seleccion').style.display = "block";
     document.getElementById('btn-comenzar').style.display = "inline-block";
-    document.getElementById('grafico-afinador').style.display = "none";
+}
+
+function regresarAlMenu() {
+    document.getElementById('status-box').style.display = "none";
+    document.getElementById('evaluacion').innerHTML = "";
+    document.getElementById('secuencia-visual').innerHTML = "";
+    document.getElementById('palabra-pantalla').innerText = "...";
+    
+    document.getElementById('zona-seleccion').style.display = "block";
+    document.getElementById('btn-comenzar').style.display = "inline-block";
 }
 </script>
 </body>
