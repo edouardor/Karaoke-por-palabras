@@ -123,3 +123,11 @@
     background: rgba(0,176,255,0.15);
     border-color: #00b0ff;
 }
+
+
+/* ===== Título de la canción junto al nombre del coro ===== */
+.titulo-cancion {
+    color: #00b0ff;
+    font-weight: 600;
+    margin-left: 6px;
+}

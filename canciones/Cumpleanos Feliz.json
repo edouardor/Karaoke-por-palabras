@@ -1,0 +1,256 @@
+{
+  "header": {
+    "keySignatures": [],
+    "meta": [],
+    "name": "Cumpleaños Feliz bajos",
+    "ppq": 480,
+    "tempos": [
+      {
+        "bpm": 80,
+        "ticks": 0
+      }
+    ],
+    "timeSignatures": []
+  },
+  "tracks": [
+    {
+      "channel": 0,
+      "controlChanges": {},
+      "pitchBends": [],
+      "instrument": {
+        "family": "piano",
+        "number": 0,
+        "name": "acoustic grand piano"
+      },
+      "name": "Bajos",
+      "notes": [
+        {
+          "duration": 0.5625,
+          "durationTicks": 360,
+          "midi": 48,
+          "name": "C3",
+          "ticks": 0,
+          "time": 0.0,
+          "velocity": 0.7
+        },
+        {
+          "duration": 0.1875,
+          "durationTicks": 120,
+          "midi": 48,
+          "name": "C3",
+          "ticks": 360,
+          "time": 0.5625,
+          "velocity": 0.7
+        },
+        {
+          "duration": 0.75,
+          "durationTicks": 480,
+          "midi": 50,
+          "name": "D3",
+          "ticks": 480,
+          "time": 0.75,
+          "velocity": 0.7
+        },
+        {
+          "duration": 0.75,
+          "durationTicks": 480,
+          "midi": 48,
+          "name": "C3",
+          "ticks": 960,
+          "time": 1.5,
+          "velocity": 0.7
+        },
+        {
+          "duration": 0.75,
+          "durationTicks": 480,
+          "midi": 53,
+          "name": "F3",
+          "ticks": 1440,
+          "time": 2.25,
+          "velocity": 0.7
+        },
+        {
+          "duration": 1.5,
+          "durationTicks": 960,
+          "midi": 52,
+          "name": "E3",
+          "ticks": 1920,
+          "time": 3.0,
+          "velocity": 0.7
+        },
+        {
+          "duration": 0.5625,
+          "durationTicks": 360,
+          "midi": 48,
+          "name": "C3",
+          "ticks": 2880,
+          "time": 4.5,
+          "velocity": 0.7
+        },
+        {
+          "duration": 0.1875,
+          "durationTicks": 120,
+          "midi": 48,
+          "name": "C3",
+          "ticks": 3240,
+          "time": 5.0625,
+          "velocity": 0.7
+        },
+        {
+          "duration": 0.75,
+          "durationTicks": 480,
+          "midi": 50,
+          "name": "D3",
+          "ticks": 3360,
+          "time": 5.25,
+          "velocity": 0.7
+        },
+        {
+          "duration": 0.75,
+          "durationTicks": 480,
+          "midi": 48,
+          "name": "C3",
+          "ticks": 3840,
+          "time": 6.0,
+          "velocity": 0.7
+        },
+        {
+          "duration": 0.75,
+          "durationTicks": 480,
+          "midi": 55,
+          "name": "G3",
+          "ticks": 4320,
+          "time": 6.75,
+          "velocity": 0.7
+        },
+        {
+          "duration": 1.5,
+          "durationTicks": 960,
+          "midi": 53,
+          "name": "F3",
+          "ticks": 4800,
+          "time": 7.5,
+          "velocity": 0.7
+        },
+        {
+          "duration": 0.5625,
+          "durationTicks": 360,
+          "midi": 48,
+          "name": "C3",
+          "ticks": 5760,
+          "time": 9.0,
+          "velocity": 0.7
+        },
+        {
+          "duration": 0.1875,
+          "durationTicks": 120,
+          "midi": 48,
+          "name": "C3",
+          "ticks": 6120,
+          "time": 9.5625,
+          "velocity": 0.7
+        },
+        {
+          "duration": 0.75,
+          "durationTicks": 480,
+          "midi": 60,
+          "name": "C4",
+          "ticks": 6240,
+          "time": 9.75,
+          "velocity": 0.7
+        },
+        {
+          "duration": 0.75,
+          "durationTicks": 480,
+          "midi": 57,
+          "name": "A3",
+          "ticks": 6720,
+          "time": 10.5,
+          "velocity": 0.7
+        },
+        {
+          "duration": 0.75,
+          "durationTicks": 480,
+          "midi": 53,
+          "name": "F3",
+          "ticks": 7200,
+          "time": 11.25,
+          "velocity": 0.7
+        },
+        {
+          "duration": 0.75,
+          "durationTicks": 480,
+          "midi": 52,
+          "name": "E3",
+          "ticks": 7680,
+          "time": 12.0,
+          "velocity": 0.7
+        },
+        {
+          "duration": 0.75,
+          "durationTicks": 480,
+          "midi": 50,
+          "name": "D3",
+          "ticks": 8160,
+          "time": 12.75,
+          "velocity": 0.7
+        },
+        {
+          "duration": 0.5625,
+          "durationTicks": 360,
+          "midi": 58,
+          "name": "A#3",
+          "ticks": 8640,
+          "time": 13.5,
+          "velocity": 0.7
+        },
+        {
+          "duration": 0.1875,
+          "durationTicks": 120,
+          "midi": 58,
+          "name": "A#3",
+          "ticks": 9000,
+          "time": 14.0625,
+          "velocity": 0.7
+        },
+        {
+          "duration": 0.75,
+          "durationTicks": 480,
+          "midi": 57,
+          "name": "A3",
+          "ticks": 9120,
+          "time": 14.25,
+          "velocity": 0.7
+        },
+        {
+          "duration": 0.75,
+          "durationTicks": 480,
+          "midi": 53,
+          "name": "F3",
+          "ticks": 9600,
+          "time": 15.0,
+          "velocity": 0.7
+        },
+        {
+          "duration": 0.75,
+          "durationTicks": 480,
+          "midi": 55,
+          "name": "G3",
+          "ticks": 10080,
+          "time": 15.75,
+          "velocity": 0.7
+        },
+        {
+          "duration": 2.25,
+          "durationTicks": 1440,
+          "midi": 53,
+          "name": "F3",
+          "ticks": 10560,
+          "time": 16.5,
+          "velocity": 0.7
+        }
+      ],
+      "endOfTrackTicks": 12000
+    }
+  ]
+}

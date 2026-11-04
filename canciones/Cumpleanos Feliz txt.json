@@ -1,0 +1,50 @@
+{
+  "titulo": "Cumpleaños Feliz",
+  "lineas": [
+    {
+      "linea_completa": "¡Cum-ple-a-ños Fe-liz,",
+      "silabas": [
+        "Cum",
+        "ple",
+        "a",
+        "ños",
+        "Fe",
+        "liz"
+      ]
+    },
+    {
+      "linea_completa": "Cum-ple-a-ños Fe-liz,",
+      "silabas": [
+        "Cum",
+        "ple",
+        "a",
+        "ños",
+        "Fe",
+        "lis"
+      ]
+    },
+    {
+      "linea_completa": "To-dos te de-se-a-mos",
+      "silabas": [
+        "To",
+        "dos",
+        "te",
+        "de",
+        "se",
+        "a",
+        "mos"
+      ]
+    },
+    {
+      "linea_completa": "Cum-ple-a-ños Fe-liz!",
+      "silabas": [
+        "Cum",
+        "ple",
+        "a",
+        "ños",
+        "Fe",
+        "liz"
+      ]
+    }
+  ]
+}

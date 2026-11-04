@@ -10,6 +10,23 @@ let toleranciaCentsConfigurada = 45;
 let palabraMostradaIndex = 0;            // palabra que se ve en pantalla (para las flechas)
 let temporizadorSiguientePalabra = null; // pausa de 800 ms tras acertar una palabra
 let idGuia = 0;                          // identifica la reproducción de guía vigente
+let bucleAudioActivo = false;            // evita arrancar varios bucles de audio a la vez
+
+// ---- Ajustes específicos por canción ----
+// Canciones en las que el usuario canta primero la nota inicial y la melodía se transpone a ella
+const CANCIONES_AFINACION_LIBRE = ["Cumpleanos Feliz"];
+// Dificultad (cents) que se propone al elegir cada canción
+const DIFICULTAD_POR_CANCION = { "Cumpleanos Feliz": 60 };   // 60 = Muy Fácil
+let dificultadPreviaUsuario = null;
+
+let modoCalibracion = false;             // true mientras se espera la primera nota
+let muestrasCalibracion = [];
+const MUESTRAS_CALIBRACION = 25;         // ~0,4 s de nota estable
+const MIDI_MIN_PRIMERA_NOTA = 36;        // Do2
+const MIDI_MAX_PRIMERA_NOTA = 64;        // Mi4 (la melodía sube hasta una octava por encima)
+
+const NOMBRES_NOTA_INGLES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+const NOMBRES_NOTA_ESPANOL = ["Do","Do#","Re","Re#","Mi","Fa","Fa#","Sol","Sol#","La","La#","Si"];
 
 function actualizarTextoDificultad(valor) {
     const txt = document.getElementById('txt-dificultad');
@@ -97,6 +114,12 @@ async function iniciarApp() {
 
         if (datosTexto.default) datosTexto = datosTexto.default;
 
+        // Mostrar el nombre de la canción junto al del coro
+        const tituloCancion = datosTexto.titulo || cancionSeleccionada;
+        const elTitulo = document.getElementById('titulo-cancion');
+        elTitulo.textContent = `· 🎼 ${tituloCancion}`;
+        elTitulo.style.display = 'inline';
+
         let lineasLetra = [];
         if (datosTexto.lineas && Array.isArray(datosTexto.lineas)) {
             lineasLetra = datosTexto.lineas;
@@ -176,8 +199,16 @@ async function iniciarApp() {
             await audioContext.resume();
         }
         
-        cargarNuevaFrasePalabra();
-        bucleDeAudio();
+        if (CANCIONES_AFINACION_LIBRE.includes(cancionSeleccionada)) {
+            iniciarCalibracion();
+        } else {
+            cargarNuevaFrasePalabra();
+        }
+
+        if (!bucleAudioActivo) {
+            bucleAudioActivo = true;
+            bucleDeAudio();
+        }
 
     } catch (err) {
         document.getElementById('palabra-pantalla').innerText = "Error";
@@ -239,7 +270,7 @@ function cargarNuevaFrasePalabra() {
         
         cajaNota.onclick = () => {
             if (!reproduciendoGuia) {
-                tocarNotaIndividualUsuario(notaIngles, cajaNota);
+                tocarNotaIndividualUsuario(notaIngles, cajaNota, idx, palabraMostradaIndex);
             }
         };
         
@@ -284,6 +315,8 @@ function cancelarTemporizadores() {
     temporizadorSiguientePalabra = null;
     idGuia++;                 // invalida la guía que esté sonando
     reproduciendoGuia = false;
+    modoCalibracion = false;
+    muestrasCalibracion = [];
 }
 
 function actualizarFlechas() {
@@ -296,6 +329,7 @@ function actualizarFlechas() {
 }
 
 function irAPalabra(nuevoIndice) {
+    if (modoCalibracion) return;
     if (nuevoIndice < 0 || nuevoIndice >= FRASES_JUEGO.length) return;
     cancelarTemporizadores();
     fraseActualIndex = nuevoIndice;
@@ -367,9 +401,9 @@ function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota, idEj
     }, duracionOriginal * 1000);
 }
 
-function tocarNotaIndividualUsuario(nombreNotaIngles, elementoCaja) {
+function tocarNotaIndividualUsuario(nombreNotaIngles, elementoCaja, idxSilaba, idxPalabra) {
     reproduciendoGuia = true;
-    const claseOriginal = elementoCaja.className;
+    const idLocal = ++idGuia; // si se navega o se sale al menú, este temporizador queda anulado
     elementoCaja.className = "nota-caja activa";
 
     const oscBase = audioContext.createOscillator();
@@ -408,12 +442,39 @@ function tocarNotaIndividualUsuario(nombreNotaIngles, elementoCaja) {
     oscHarm.stop(audioContext.currentTime + 1.0);
 
     setTimeout(() => {
-        elementoCaja.className = claseOriginal;
+        if (idLocal !== idGuia) return;
         reproduciendoGuia = false;
+        // Tras oír la sílaba, hay que cantar la palabra desde ella
+        reiniciarDesdeSilaba(idxSilaba, idxPalabra);
     }, 1000);
+}
+
+// Reinicia la palabra actual para cantarla desde la sílaba indicada
+function reiniciarDesdeSilaba(idxSilaba, idxPalabra) {
+    // Si la palabra ya se completó (o se cambió de palabra), no tocar nada
+    if (idxPalabra !== fraseActualIndex || idxPalabra !== palabraMostradaIndex) return;
+    const datosFrase = FRASES_JUEGO[idxPalabra];
+    if (!datosFrase) return;
+
+    for (let i = 0; i < datosFrase.notes.length; i++) {
+        const caja = document.getElementById(`caja-nota-${i}`);
+        if (!caja) continue;
+        if (i < idxSilaba) {
+            // Las anteriores no se exigen: se conservan si estaban completadas
+            if (!caja.classList.contains('completada')) caja.className = "nota-caja";
+        } else {
+            caja.className = (i === idxSilaba) ? "nota-caja activa" : "nota-caja";
+        }
+    }
+
+    notaSecuenciaIndex = idxSilaba;
+    muestrasConsecutivasBien = 0;
+    ultimaNotaValidadaTexto = "";
+    document.getElementById('evaluacion').innerText = "";
 }
 function bucleDeAudio() {
     requestAnimationFrame(bucleDeAudio);
+    if (modoCalibracion) { procesarCalibracion(); return; }
     if (reproduciendoGuia) return;
 
     if (fraseActualIndex >= FRASES_JUEGO.length) return; 
@@ -519,8 +580,117 @@ function bucleDeAudio() {
     }
 }
 
+// ==========================================
+// PRIMERA NOTA LIBRE + TRANSPOSICIÓN
+// ==========================================
+function midiDesdeNombreIngles(nombre) {
+    let letra = nombre.replace(/[0-9]/g, '').trim().toUpperCase();
+    const octava = parseInt(nombre.replace(/[^0-9]/g, '')) || 4;
+    const bemoles = { "DB": "C#", "EB": "D#", "GB": "F#", "AB": "G#", "BB": "A#" };
+    if (bemoles[letra]) letra = bemoles[letra];
+    return (octava + 1) * 12 + MAPA_NOTAS_A_NUMERO[letra.toLowerCase()];
+}
+
+function nombreEspanolDesdeMidi(midi) {
+    return NOMBRES_NOTA_ESPANOL[((midi % 12) + 12) % 12] + (Math.floor(midi / 12) - 1);
+}
+
+function iniciarCalibracion() {
+    modoCalibracion = true;
+    muestrasCalibracion = [];
+    reproduciendoGuia = false;
+
+    document.getElementById('btn-anterior').style.visibility = 'hidden';
+    document.getElementById('btn-siguiente').style.visibility = 'hidden';
+    document.getElementById('zona-reinicio').style.display = 'none';
+    document.getElementById('palabra-pantalla').innerText = "🎤 Canta tu primera nota";
+    document.getElementById('secuencia-visual').innerHTML =
+        "<div style='font-size:16px; color:#aaa; line-height:1.5; max-width:420px;'>" +
+        "Elige una nota cómoda y grave y mantenla un momento. " +
+        "La canción partirá de ella y llegará como máximo una octava por encima.</div>";
+    document.getElementById('evaluacion').innerText = "Esperando tu voz...";
+}
+
+function procesarCalibracion() {
+    const mensaje = document.getElementById('evaluacion');
+    analyser.getFloatTimeDomainData(dataArray);
+    const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
+
+    if (frecuencia === -1 || frecuencia < 60 || frecuencia > 1000) {
+        muestrasCalibracion = [];
+        return;
+    }
+
+    muestrasCalibracion.push(69 + 12 * Math.log2(frecuencia / 440));
+    if (muestrasCalibracion.length > MUESTRAS_CALIBRACION) muestrasCalibracion.shift();
+    if (muestrasCalibracion.length < MUESTRAS_CALIBRACION) {
+        mensaje.innerText = "Detectando tu nota...";
+        return;
+    }
+
+    const maximo = Math.max(...muestrasCalibracion);
+    const minimo = Math.min(...muestrasCalibracion);
+    if (maximo - minimo > 0.7) {
+        mensaje.innerText = "Mantén la nota estable...";
+        return;
+    }
+
+    const media = muestrasCalibracion.reduce((a, b) => a + b, 0) / muestrasCalibracion.length;
+    const notaMidi = Math.round(media);
+    const nombre = nombreEspanolDesdeMidi(notaMidi);
+
+    if (notaMidi < MIDI_MIN_PRIMERA_NOTA || notaMidi > MIDI_MAX_PRIMERA_NOTA) {
+        mensaje.innerText = `${nombre} queda fuera de rango. Prueba con una nota entre ${nombreEspanolDesdeMidi(MIDI_MIN_PRIMERA_NOTA)} y ${nombreEspanolDesdeMidi(MIDI_MAX_PRIMERA_NOTA)}.`;
+        muestrasCalibracion = [];
+        return;
+    }
+
+    // Nota válida: transponer la canción y empezar
+    modoCalibracion = false;
+    muestrasCalibracion = [];
+    reproduciendoGuia = true; // pausa la evaluación hasta que arranque la primera palabra
+    transponerCancionAPrimeraNota(notaMidi);
+    document.getElementById('secuencia-visual').innerHTML = "";
+    mensaje.innerHTML = `<span class='success'>✔ Primera nota: ${nombre}. ¡Empezamos!</span>`;
+
+    temporizadorSiguientePalabra = setTimeout(() => {
+        mensaje.innerText = "";
+        cargarNuevaFrasePalabra();
+    }, 1200);
+}
+
+function transponerCancionAPrimeraNota(midiPrimeraNota) {
+    const midiOriginal = midiDesdeNombreIngles(FRASES_JUEGO[0].notesIngles[0]);
+    const desplazamiento = midiPrimeraNota - midiOriginal;
+
+    FRASES_JUEGO.forEach(palabra => {
+        const midis = palabra.notesIngles.map(n => midiDesdeNombreIngles(n) + desplazamiento);
+        palabra.notesIngles = midis.map(m => NOMBRES_NOTA_INGLES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1));
+        palabra.notes = midis.map(m => NOMBRES_NOTA_ESPANOL[((m % 12) + 12) % 12]);
+    });
+}
+
+// ==========================================
+// DIFICULTAD PROPUESTA SEGÚN LA CANCIÓN
+// ==========================================
+function alCambiarCancion() {
+    const slider = document.getElementById('selector-dificultad');
+    const cancion = document.getElementById('selector-cancion').value;
+
+    if (cancion in DIFICULTAD_POR_CANCION) {
+        if (dificultadPreviaUsuario === null) dificultadPreviaUsuario = slider.value;
+        slider.value = DIFICULTAD_POR_CANCION[cancion];
+    } else if (dificultadPreviaUsuario !== null) {
+        slider.value = dificultadPreviaUsuario;   // recupera la dificultad que tenía el usuario
+        dificultadPreviaUsuario = null;
+    }
+    actualizarTextoDificultad(slider.value);
+}
+document.addEventListener('DOMContentLoaded', alCambiarCancion);
+
 function regresarAlMenu() {
     cancelarTemporizadores();
+    document.getElementById('titulo-cancion').style.display = "none";
     document.getElementById('status-box').style.display = "none";
     document.getElementById('evaluacion').innerHTML = "";
     document.getElementById('secuencia-visual').innerHTML = "";
