@@ -35,6 +35,10 @@
     <button id="btn-comenzar" onclick="iniciarApp()">Comenzar Entrenamiento</button>
     
     <div class="status-box" id="status-box" style="display: none;">
+        <div class="barra-superior">
+            <button class="btn-home" onclick="regresarAlMenu()" aria-label="Volver al inicio" title="Volver al inicio">🏠 Inicio</button>
+        </div>
+
         <div class="navegacion-palabra">
             <button id="btn-anterior" class="btn-flecha" onclick="irAPalabraAnterior()" aria-label="Palabra anterior" title="Palabra anterior (←)" style="visibility:hidden">◀</button>
             <div id="palabra-pantalla" class="palabra-actual">...</div>
