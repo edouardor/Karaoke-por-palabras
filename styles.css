@@ -1,0 +1,77 @@
+/* ==========================================
+   styles.css - DISEÑO Y ESTILOS VISUALES
+   ========================================== */
+
+/* Estilos base y tipografía */
+
+    
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #121214;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            text-align: center;
+            background: #1a1a1e;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            max-width: 580px;
+            width: 90%;
+        }
+        button {
+            background: #00e676;
+            color: #121214;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        button:hover { transform: scale(1.05); }
+        .btn-volver { background: #00b0ff; color: #ffffff; margin-top: 25px; padding: 12px 25px; font-size: 16px; }
+        .status-box { margin-top: 30px; font-size: 22px; min-height: 140px; }
+        .palabra-actual { color: #ffeb3b; font-size: 42px; font-weight: bold; display: block; margin-bottom: 25px; text-shadow: 0 0 15px rgba(255,235,59,0.4); }
+        .secuencia-cajas { display: flex; justify-content: center; align-items: flex-end; gap: 12px; margin: 25px 0; min-height: 120px; }
+        
+        .nota-bloque { display: flex; flex-direction: column; align-items: center; transition: all 0.15s ease; }
+        .caja-silaba { font-size: 16px; font-weight: 600; color: #ffeb3b; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; min-height: 20px; }
+        
+        /* ESTILOS DE LAS CAJAS SEGÚN DESVIACIÓN */
+        .nota-caja { background: #2a2a30; padding: 8px 0; border-radius: 8px; border: 2px solid #444; font-size: 15px; font-weight: bold; color: #aaa; transition: all 0.15s ease; }
+        .nota-caja.activa { border-color: #00b0ff; color: #00b0ff; background: rgba(0,176,255,0.1); }
+        .nota-caja.completada { border-color: #00e676; color: #00e676; background: rgba(0,230,118,0.2); }
+        .nota-caja.umbral-amarillo { border-color: #ffd740; color: #ffd740; background: rgba(255,215,64,0.15); box-shadow: 0 0 8px rgba(255,215,64,0.2); } 
+        .nota-caja.umbral-rojo { border-color: #ff5252; color: #ff5252; background: rgba(255,82,82,0.15); box-shadow: 0 0 8px rgba(255,82,82,0.2); } 
+        
+        .control-dificultad { margin: 20px 0 30px 0; background: #222226; padding: 15px; border-radius: 12px; border: 1px solid #333; }
+        .control-dificultad input[type=range] { width: 100%; margin-top: 10px; accent-color: #00b0ff; cursor: pointer; }
+        .etiquetas-rango { display: flex; justify-content: space-between; font-size: 11px; color: #aaa; margin-top: 5px; padding: 0 2px; }
+        .success { color: #00e676; font-weight: bold; }
+        .error { color: #ff5252; }
+
+/* Añade esto al final de tu styles.css para asegurar el nuevo contraste */
+.status-perfect {
+    color: #00D2FF !important;
+    text-shadow: 0 0 8px rgba(0, 210, 255, 0.4);
+}
+
+.status-warning {
+    color: #FFD700 !important;
+    /* Sombra oscura para que el amarillo resalte sobre cualquier fondo */
+    text-shadow: 0 0 4px rgba(0, 0, 0, 1), 0 0 8px rgba(255, 215, 0, 0.6);
+    font-weight: bold;
+}
+
+.status-fail {
+    color: #FF3B30 !important;
+    text-shadow: 0 0 8px rgba(255, 59, 48, 0.4);
+}
