@@ -35,7 +35,11 @@
     <button id="btn-comenzar" onclick="iniciarApp()">Comenzar Entrenamiento</button>
     
     <div class="status-box" id="status-box" style="display: none;">
-        <div id="palabra-pantalla" class="palabra-actual">...</div>
+        <div class="navegacion-palabra">
+            <button id="btn-anterior" class="btn-flecha" onclick="irAPalabraAnterior()" aria-label="Palabra anterior" title="Palabra anterior (←)" style="visibility:hidden">◀</button>
+            <div id="palabra-pantalla" class="palabra-actual">...</div>
+            <button id="btn-siguiente" class="btn-flecha" onclick="irAPalabraSiguiente()" aria-label="Palabra siguiente" title="Palabra siguiente (→)" style="visibility:hidden">▶</button>
+        </div>
         <div id="secuencia-visual" class="secuencia-cajas"></div>
 
         <div id="evaluacion" style="margin-top: 15px; font-weight: bold; font-size: 18px; min-height: 25px;"></div>
@@ -51,4 +55,3 @@
     <script src="./app.js"></script>
 </body>
 </html>
-

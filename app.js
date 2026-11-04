@@ -7,6 +7,9 @@ const MUESTRAS_NECESARIAS = 3;
 let reproduciendoGuia = false;
 let ultimaNotaValidadaTexto = "";
 let toleranciaCentsConfigurada = 45; 
+let palabraMostradaIndex = 0;            // palabra que se ve en pantalla (para las flechas)
+let temporizadorSiguientePalabra = null; // pausa de 800 ms tras acertar una palabra
+let idGuia = 0;                          // identifica la reproducción de guía vigente
 
 function actualizarTextoDificultad(valor) {
     const txt = document.getElementById('txt-dificultad');
@@ -67,6 +70,7 @@ function autoCorrelacion(buffer, sampleRate) {
 }
 async function iniciarApp() {
     try {
+        cancelarTemporizadores();
         FRASES_JUEGO = [];
         fraseActualIndex = 0;
         notaSecuenciaIndex = 0;
@@ -181,6 +185,9 @@ async function iniciarApp() {
     }
 }
 function cargarNuevaFrasePalabra() {
+    palabraMostradaIndex = fraseActualIndex;
+    actualizarFlechas();
+
     if (fraseActualIndex >= FRASES_JUEGO.length) {
         document.getElementById('palabra-pantalla').innerText = "🎉 ¡COMPLETADO!";
         document.getElementById('secuencia-visual').innerHTML = "";
@@ -265,13 +272,53 @@ function cargarNuevaFrasePalabra() {
         contenedorVisual.appendChild(bloque);
     });
 
-    reproducirCadenaNotasGuia(datosFrase.notesIngles, datosFrase.duraciones, 0);
+    idGuia++;
+    reproducirCadenaNotasGuia(datosFrase.notesIngles, datosFrase.duraciones, 0, idGuia);
 }
 
-function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota) {
+// ==========================================
+// NAVEGACIÓN ENTRE PALABRAS (flechas)
+// ==========================================
+function cancelarTemporizadores() {
+    clearTimeout(temporizadorSiguientePalabra);
+    temporizadorSiguientePalabra = null;
+    idGuia++;                 // invalida la guía que esté sonando
+    reproduciendoGuia = false;
+}
+
+function actualizarFlechas() {
+    const btnAnt = document.getElementById('btn-anterior');
+    const btnSig = document.getElementById('btn-siguiente');
+    if (!btnAnt || !btnSig) return;
+    // visibility (y no display) para que la palabra no se desplace al ocultarlas
+    btnAnt.style.visibility = (palabraMostradaIndex > 0 && FRASES_JUEGO.length > 0) ? 'visible' : 'hidden';
+    btnSig.style.visibility = (palabraMostradaIndex < FRASES_JUEGO.length - 1) ? 'visible' : 'hidden';
+}
+
+function irAPalabra(nuevoIndice) {
+    if (nuevoIndice < 0 || nuevoIndice >= FRASES_JUEGO.length) return;
+    cancelarTemporizadores();
+    fraseActualIndex = nuevoIndice;
+    document.getElementById('evaluacion').innerText = "";
+    document.getElementById('zona-reinicio').style.display = "none";
+    cargarNuevaFrasePalabra();
+}
+
+function irAPalabraAnterior() { irAPalabra(palabraMostradaIndex - 1); }
+function irAPalabraSiguiente() { irAPalabra(palabraMostradaIndex + 1); }
+
+// Atajos de teclado: ← y →
+document.addEventListener('keydown', (e) => {
+    if (document.getElementById('status-box').style.display !== 'block') return;
+    if (e.key === 'ArrowLeft') irAPalabraAnterior();
+    if (e.key === 'ArrowRight') irAPalabraSiguiente();
+});
+
+function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota, idEjecucion) {
+    if (idEjecucion !== idGuia) return; // se navegó a otra palabra: esta guía ya no vale
     if (indiceNota >= listaNotas.length) {
         setTimeout(() => { 
-            reproduciendoGuia = false; 
+            if (idEjecucion === idGuia) reproduciendoGuia = false; 
         }, 300);
         return;
     }
@@ -316,7 +363,7 @@ function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota) {
     osciladorHarmonico.stop(audioContext.currentTime + duracionOriginal);
     
     setTimeout(() => {
-        reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota + 1);
+        reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota + 1, idEjecucion);
     }, duracionOriginal * 1000);
 }
 
@@ -442,7 +489,7 @@ function bucleDeAudio() {
                     document.getElementById('evaluacion').innerHTML = "<span class='success'>¡Palabra correcta! ✨</span>";
                     fraseActualIndex++;
                     ultimaNotaValidadaTexto = ""; 
-                    setTimeout(() => {
+                    temporizadorSiguientePalabra = setTimeout(() => {
                         document.getElementById('evaluacion').innerText = "";
                         cargarNuevaFrasePalabra();
                     }, 800);
@@ -473,6 +520,7 @@ function bucleDeAudio() {
 }
 
 function regresarAlMenu() {
+    cancelarTemporizadores();
     document.getElementById('status-box').style.display = "none";
     document.getElementById('evaluacion').innerHTML = "";
     document.getElementById('secuencia-visual').innerHTML = "";
@@ -481,14 +529,3 @@ function regresarAlMenu() {
     document.getElementById('zona-seleccion').style.display = "block";
     document.getElementById('btn-comenzar').style.display = "inline-block";
 }
-
-function regresarAlMenu() {
-    document.getElementById('status-box').style.display = "none";
-    document.getElementById('evaluacion').innerHTML = "";
-    document.getElementById('secuencia-visual').innerHTML = "";
-    document.getElementById('palabra-pantalla').innerText = "...";
-    
-    document.getElementById('zona-seleccion').style.display = "block";
-    document.getElementById('btn-comenzar').style.display = "inline-block";
-}
-

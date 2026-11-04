@@ -75,3 +75,32 @@
     color: #FF3B30 !important;
     text-shadow: 0 0 8px rgba(255, 59, 48, 0.4);
 }
+
+/* ===== Flechas de navegación entre palabras ===== */
+.navegacion-palabra {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 25px;
+}
+.navegacion-palabra .palabra-actual {
+    flex: 1;
+    margin-bottom: 0;
+}
+.btn-flecha {
+    flex: 0 0 auto;
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    font-size: 18px;
+    line-height: 1;
+    border-radius: 50%;
+    background: #2a2a30;
+    color: #00b0ff;
+    border: 2px solid #444;
+}
+.btn-flecha:hover {
+    background: rgba(0,176,255,0.15);
+    border-color: #00b0ff;
+}
