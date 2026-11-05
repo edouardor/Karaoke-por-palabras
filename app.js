@@ -10,6 +10,7 @@ let toleranciaCentsConfigurada = 45;
 let palabraMostradaIndex = 0;            // palabra que se ve en pantalla (para las flechas)
 let temporizadorSiguientePalabra = null; // pausa de 800 ms tras acertar una palabra
 let idGuia = 0;                          // identifica la reproducción de guía vigente
+let esperandoSiguientePalabra = false;   // pausa del micro entre una palabra acertada y la siguiente
 let bucleAudioActivo = false;            // evita arrancar varios bucles de audio a la vez
 
 // ---- Ajustes específicos por canción ----
@@ -153,8 +154,14 @@ async function iniciarApp() {
         lineasLetra.forEach(linea => {
             if (!linea.linea_completa) return;
             let palabrasFrase = linea.linea_completa.split(/\s+/);
-            palabrasFrase.forEach(palBase => {
+            // Opcional: "texto_visible" = las palabras reales a mostrar (útil con melismas,
+            // p. ej. "ca-an-ti-co-rum" se muestra como "Canticorum")
+            const palabrasVisibles = (linea.texto_visible || "").split(/\s+/).filter(Boolean);
+            palabrasFrase.forEach((palBase, idxPalabra) => {
                 let palabraLimpia = palBase.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
+                if (palabrasVisibles.length === palabrasFrase.length) {
+                    palabraLimpia = palabrasVisibles[idxPalabra].replace(/_/g, " ").replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
+                }
                 let numeroSilabas = (palBase.match(/-/g) || []).length + 1;
                 let silabasLista = palBase.replace(/[.,\/#!$%\^&\*;:{}=_`~()]/g,"").split("-");
                 
@@ -216,6 +223,7 @@ async function iniciarApp() {
     }
 }
 function cargarNuevaFrasePalabra() {
+    esperandoSiguientePalabra = false;
     palabraMostradaIndex = fraseActualIndex;
     actualizarFlechas();
 
@@ -317,6 +325,7 @@ function cancelarTemporizadores() {
     reproduciendoGuia = false;
     modoCalibracion = false;
     muestrasCalibracion = [];
+    esperandoSiguientePalabra = false;
 }
 
 function actualizarFlechas() {
@@ -475,13 +484,14 @@ function reiniciarDesdeSilaba(idxSilaba, idxPalabra) {
 function bucleDeAudio() {
     requestAnimationFrame(bucleDeAudio);
     if (modoCalibracion) { procesarCalibracion(); return; }
-    if (reproduciendoGuia) return;
+    if (reproduciendoGuia || esperandoSiguientePalabra) return;
 
     if (fraseActualIndex >= FRASES_JUEGO.length) return; 
 
     const datosFraseActual = FRASES_JUEGO[fraseActualIndex];
     const notaAInterpretar = datosFraseActual.notes[notaSecuenciaIndex];
     const notaAInterpretarIngles = datosFraseActual.notesIngles[notaSecuenciaIndex];
+    if (!notaAInterpretar || !notaAInterpretarIngles) return; // seguridad: índice fuera de la palabra
 
     analyser.getFloatTimeDomainData(dataArray);
     const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
@@ -550,6 +560,7 @@ function bucleDeAudio() {
                     document.getElementById('evaluacion').innerHTML = "<span class='success'>¡Palabra correcta! ✨</span>";
                     fraseActualIndex++;
                     ultimaNotaValidadaTexto = ""; 
+                    esperandoSiguientePalabra = true; // ignora el micro hasta cargar la siguiente palabra
                     temporizadorSiguientePalabra = setTimeout(() => {
                         document.getElementById('evaluacion').innerText = "";
                         cargarNuevaFrasePalabra();

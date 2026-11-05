@@ -1,0 +1,69 @@
+{
+  "titulo": "Salta Navideña",
+  "lineas": [
+    {
+      "linea_completa": "Va-mos a bus-car al ni-ño Jé-sus,",
+      "texto_visible": "Vamos a buscar al niño Jesús,",
+      "silabas": [
+        "Va",
+        "mos",
+        "a",
+        "bus",
+        "car",
+        "al",
+        "ni",
+        "ño",
+        "Jé",
+        "sus"
+      ]
+    },
+    {
+      "linea_completa": "Que na-cen Be-lén y mue-ren la cruz,",
+      "texto_visible": "Que nace_en Belén y muere_en la cruz,",
+      "silabas": [
+        "Que",
+        "na",
+        "cen",
+        "Be",
+        "lén",
+        "y",
+        "mue",
+        "ren",
+        "la",
+        "cruz"
+      ]
+    },
+    {
+      "linea_completa": "Que na-cen Be-lén y mue-ren la cruz,",
+      "texto_visible": "Que nace_en Belén y muere_en la cruz,",
+      "silabas": [
+        "Que",
+        "na",
+        "cen",
+        "Be",
+        "lén",
+        "y",
+        "mue",
+        "ren",
+        "la",
+        "cruz"
+      ]
+    },
+    {
+      "linea_completa": "Va-mos a bus-car al ni-ño Jé-sus.",
+      "texto_visible": "Vamos a buscar al niño Jesús.",
+      "silabas": [
+        "Va",
+        "mos",
+        "a",
+        "bus",
+        "car",
+        "al",
+        "ni",
+        "ño",
+        "Jé",
+        "sus"
+      ]
+    }
+  ]
+}

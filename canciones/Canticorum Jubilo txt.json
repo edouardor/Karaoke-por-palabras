@@ -1,0 +1,83 @@
+{
+  "titulo": "Canticorum Jubilo",
+  "lineas": [
+    {
+      "linea_completa": "can-ti-i-co-rum ju-u-u-bi-lo re-e-e-e-e-gi ma-gno psa-a-a-a-li-te",
+      "texto_visible": "Canticorum jubilo, Regi magno psallite.",
+      "silabas": [
+        "can",
+        "ti",
+        "i", 
+        "co",
+        "rum",
+        "ju",
+        "u",
+        "u",
+        "bi",
+        "lo",
+        "re",
+        "e",
+        "e",
+        "e",
+        "e",
+        "gi",
+        "ma",
+        "gno",
+        "psa",
+        "a",
+        "a",
+        "a",
+        "li",
+        "te"
+      ]
+    },
+    {
+      "linea_completa": "jam re-sul-tent mu-u-u-si-ca un-da tel-lus si-i-i-de-ra",
+      "texto_visible": "Jam resultent musica, unda tellus, sidera.",
+      "silabas": [
+        "jam",
+        "re",
+        "sul",
+        "tent",
+        "mu",
+        "u",
+        "u",
+        "si",
+        "ca",
+        "un",
+        "da",
+        "tel",
+        "lus",
+        "si",
+        "i",
+        "i",
+        "de",
+        "ra"
+      ]
+    },
+    {
+      "linea_completa": "per-so-nan-tes o-o-or-ga-nis ju-bi-la-te pla-a-au-di-te",
+      "texto_visible": "Personantes organis, jubilate, plaudite.",
+      "silabas": [
+        "per",
+        "so",
+        "nan",
+        "tes",
+        "o",
+        "o",
+        "or",
+        "ga",
+        "nis",
+        "ju",
+        "bi",
+        "la",
+        "te",
+        "pla",
+        "a",
+        "au",
+        "di",
+        "te"
+      ]
+    }
+  ]
+}
