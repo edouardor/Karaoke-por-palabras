@@ -131,3 +131,22 @@
     font-weight: 600;
     margin-left: 6px;
 }
+
+
+/* ===== Botones de inicio y modo escucha solo ===== */
+.botones-inicio {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+.btn-escucha { background: #00b0ff; color: #ffffff; }
+.btn-pausa { background: #ffd740; color: #121214; }
+.controles-escucha {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 20px;
+}
+.controles-escucha button { padding: 12px 22px; font-size: 16px; }

@@ -19,8 +19,8 @@
             <option value="Cumpleanos Feliz" selected>Cumpleaños Feliz (prueba)</option>
             <option value="Adeste">Adeste Fideles</option>
             <option value="Canticorum Jubilo">Canticorum Jubilo</option>
-            <option value="Salta Navideña">Salta Navideña</option>
             <option value="No la debemos dormir">No la debemos dormir</option>
+            <option value="Salta Navideña">Salta Navideña</option>
         </select>
 
         <div class="control-dificultad">
@@ -35,7 +35,10 @@
         </div>
     </div>
 
-    <button id="btn-comenzar" onclick="iniciarApp()">Comenzar Entrenamiento</button>
+    <div id="botones-inicio" class="botones-inicio">
+        <button id="btn-comenzar" onclick="iniciarApp('entrenamiento')">🎤 Modo entrenamiento</button>
+        <button id="btn-escucha" class="btn-escucha" onclick="iniciarApp('escucha')">🎧 Modo escucha solo</button>
+    </div>
     
     <div class="status-box" id="status-box" style="display: none;">
         <div class="barra-superior">
@@ -50,6 +53,12 @@
         <div id="secuencia-visual" class="secuencia-cajas"></div>
 
         <div id="evaluacion" style="margin-top: 15px; font-weight: bold; font-size: 18px; min-height: 25px;"></div>
+
+        <div id="controles-escucha" class="controles-escucha" style="display: none;">
+            <button id="btn-pausa-escucha" class="btn-pausa" onclick="pausarEscucha()" aria-label="Pausa" title="Pausa">❚❚ Pausa</button>
+            <button id="btn-seguir-escucha" class="btn-escucha" onclick="iniciarEscuchaDesde(fraseActualIndex)" style="display: none;">▶ Seguir escuchando</button>
+            <button id="btn-entrenar-aqui" onclick="pasarAEntrenamiento()" style="display: none;">🎤 Entrenar desde esta palabra</button>
+        </div>
         
         <div id="zona-reinicio" style="display: none;">
             <button class="btn-volver" onclick="regresarAlMenu()">⬅️ Volver a Selección</button>

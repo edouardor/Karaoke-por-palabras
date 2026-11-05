@@ -11,6 +11,14 @@ let palabraMostradaIndex = 0;            // palabra que se ve en pantalla (para 
 let temporizadorSiguientePalabra = null; // pausa de 800 ms tras acertar una palabra
 let idGuia = 0;                          // identifica la reproducción de guía vigente
 let esperandoSiguientePalabra = false;   // pausa del micro entre una palabra acertada y la siguiente
+// ---- Modo escucha solo ----
+let modoEscucha = false;                 // true mientras se está en el modo escucha
+let estadoEscucha = 'reproduciendo';     // 'reproduciendo' | 'pausada' | 'fin'
+let temporizadorEscucha = null;          // temporizador de la siguiente nota
+let relojEscucha = { t0: 0, tiempoBase: 0 }; // referencia para no acumular retraso
+let sonidoEscuchaActual = null;          // última nota sonando (para silenciarla al pausar)
+let cancionActual = "";                  // canción elegida (para pasar de escucha a entrenamiento)
+
 let bucleAudioActivo = false;            // evita arrancar varios bucles de audio a la vez
 
 // ---- Ajustes específicos por canción ----
@@ -86,7 +94,7 @@ function autoCorrelacion(buffer, sampleRate) {
     if (a) T0 = T0 - b / (2 * a);
     return sampleRate / T0;
 }
-async function iniciarApp() {
+async function iniciarApp(modo = 'entrenamiento') {
     try {
         cancelarTemporizadores();
         FRASES_JUEGO = [];
@@ -98,7 +106,8 @@ async function iniciarApp() {
         toleranciaCentsConfigurada = parseInt(document.getElementById('selector-dificultad').value) || 45;
 
         const cancionSeleccionada = document.getElementById('selector-cancion').value;
-        document.getElementById('btn-comenzar').style.display = 'none';
+        cancionActual = cancionSeleccionada;
+        document.getElementById('botones-inicio').style.display = 'none';
         document.getElementById('zona-seleccion').style.display = 'none';
         document.getElementById('zona-reinicio').style.display = 'none';
         document.getElementById('status-box').style.display = 'block';
@@ -138,15 +147,20 @@ async function iniciarApp() {
             if (pista) notasRaw = pista.notes;
         }
 
+        let tAcumulado = 0;
         let notasListaCompleta = notasRaw.map(n => {
             let nombre = (typeof n === 'string') ? n : (n.name || n.note || n.pitch || "");
             let duracion = (typeof n === 'object' && n.duration) ? n.duration : 0.4;
+            // Instante de inicio de la nota (si el JSON no lo trae, se encadenan las duraciones)
+            let tiempo = (typeof n === 'object' && typeof n.time === 'number') ? n.time : tAcumulado;
+            tAcumulado = tiempo + duracion;
             let notaLimpia = nombre.replace(/[0-9]/g, '').trim();
             const traducciones = {"C": "Do", "D": "Re", "E": "Mi", "F": "Fa", "G": "Sol", "A": "La", "B": "Si"};
             let notaBase = notaLimpia.charAt(0).toUpperCase() + notaLimpia.slice(1);
             return {
                 nombre: traducciones[notaBase.charAt(0)] ? traducciones[notaBase.charAt(0)] + notaBase.slice(1) : notaLimpia,
-                duracion: duracion
+                duracion: duracion,
+                tiempo: tiempo
             };
         }).filter(n => n.nombre !== "");
 
@@ -169,12 +183,14 @@ async function iniciarApp() {
                 let notasInglesDeEstaPalabra = [];
                 let duracionesDeEstaPalabra = [];
                 let silabasDeEstaPalabra = [];
+                let tiemposDeEstaPalabra = [];
                 
                 for (let i = 0; i < numeroSilabas; i++) {
                     if (notasListaCompleta[notasContador]) {
                         notasDeEstaPalabra.push(notasListaCompleta[notasContador].nombre);
                         notasInglesDeEstaPalabra.push(notasRaw[notasContador].name || notasRaw[notasContador].note || "D4");
                         duracionesDeEstaPalabra.push(notasListaCompleta[notasContador].duracion);
+                        tiemposDeEstaPalabra.push(notasListaCompleta[notasContador].tiempo);
                         silabasDeEstaPalabra.push(silabasLista[i] || "...");
                         notasContador++;
                     }
@@ -186,26 +202,26 @@ async function iniciarApp() {
                         notes: notasDeEstaPalabra,
                         notesIngles: notasInglesDeEstaPalabra,
                         duraciones: duracionesDeEstaPalabra,
+                        tiempos: tiemposDeEstaPalabra,
                         silabas: silabasDeEstaPalabra
                     });
                 }
             });
         });
 
-        if (!audioContext) {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            source = audioContext.createMediaStreamSource(stream);
-            analyser = audioContext.createAnalyser();
-            analyser.fftSize = 2048;
-            dataArray = new Float32Array(analyser.fftSize);
-            source.connect(analyser);
+        if (FRASES_JUEGO.length === 0) throw new Error("No se encontraron palabras en la canción.");
+
+        // ----- MODO ESCUCHA SOLO: no hace falta micrófono -----
+        if (modo === 'escucha') {
+            asegurarAudioContext();
+            if (audioContext.state === 'suspended') await audioContext.resume();
+            iniciarEscuchaDesde(0);
+            return;
         }
-        
-        if (audioContext.state === 'suspended') {
-            await audioContext.resume();
-        }
-        
+
+        // ----- MODO ENTRENAMIENTO -----
+        await asegurarMicrofono();
+
         if (CANCIONES_AFINACION_LIBRE.includes(cancionSeleccionada)) {
             iniciarCalibracion();
         } else {
@@ -222,7 +238,7 @@ async function iniciarApp() {
         document.getElementById('evaluacion').innerHTML = `<span class='error'>❌ Error: ${err.message}</span>`;
     }
 }
-function cargarNuevaFrasePalabra() {
+function cargarNuevaFrasePalabra(sinGuia = false) {
     esperandoSiguientePalabra = false;
     palabraMostradaIndex = fraseActualIndex;
     actualizarFlechas();
@@ -277,7 +293,7 @@ function cargarNuevaFrasePalabra() {
         cajaNota.style.cursor = "pointer";
         
         cajaNota.onclick = () => {
-            if (!reproduciendoGuia) {
+            if (!reproduciendoGuia && !modoEscucha) {
                 tocarNotaIndividualUsuario(notaIngles, cajaNota, idx, palabraMostradaIndex);
             }
         };
@@ -311,8 +327,10 @@ function cargarNuevaFrasePalabra() {
         contenedorVisual.appendChild(bloque);
     });
 
-    idGuia++;
-    reproducirCadenaNotasGuia(datosFrase.notesIngles, datosFrase.duraciones, 0, idGuia);
+    if (!sinGuia) {
+        idGuia++;
+        reproducirCadenaNotasGuia(datosFrase.notesIngles, datosFrase.duraciones, 0, idGuia);
+    }
 }
 
 // ==========================================
@@ -326,6 +344,10 @@ function cancelarTemporizadores() {
     modoCalibracion = false;
     muestrasCalibracion = [];
     esperandoSiguientePalabra = false;
+    clearTimeout(temporizadorEscucha);
+    temporizadorEscucha = null;
+    silenciarSonidoEscucha();
+    modoEscucha = false;
 }
 
 function actualizarFlechas() {
@@ -340,6 +362,7 @@ function actualizarFlechas() {
 function irAPalabra(nuevoIndice) {
     if (modoCalibracion) return;
     if (nuevoIndice < 0 || nuevoIndice >= FRASES_JUEGO.length) return;
+    if (modoEscucha) { irAPalabraEnEscucha(nuevoIndice); return; }
     cancelarTemporizadores();
     fraseActualIndex = nuevoIndice;
     document.getElementById('evaluacion').innerText = "";
@@ -484,7 +507,7 @@ function reiniciarDesdeSilaba(idxSilaba, idxPalabra) {
 function bucleDeAudio() {
     requestAnimationFrame(bucleDeAudio);
     if (modoCalibracion) { procesarCalibracion(); return; }
-    if (reproduciendoGuia || esperandoSiguientePalabra) return;
+    if (reproduciendoGuia || esperandoSiguientePalabra || modoEscucha) return;
 
     if (fraseActualIndex >= FRASES_JUEGO.length) return; 
 
@@ -699,14 +722,244 @@ function alCambiarCancion() {
 }
 document.addEventListener('DOMContentLoaded', alCambiarCancion);
 
+// ==========================================
+// AUDIO: CONTEXTO Y MICRÓFONO
+// ==========================================
+function asegurarAudioContext() {
+    if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+}
+
+async function asegurarMicrofono() {
+    asegurarAudioContext();
+    if (!analyser) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        source = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048;
+        dataArray = new Float32Array(analyser.fftSize);
+        source.connect(analyser);
+    }
+    if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+    }
+}
+
+// ==========================================
+// MODO ESCUCHA SOLO
+// ==========================================
+// Suena la canción entera, palabra tras palabra, con el ritmo real del MIDI
+// (incluidos los silencios) y sin parar al final de cada palabra.
+
+function sonarNota(nombreNotaIngles, duracion) {
+    asegurarAudioContext();
+    const dur = Math.max(duracion || 0.4, 0.12);
+    const ahora = audioContext.currentTime;
+
+    let letra = nombreNotaIngles.replace(/[0-9]/g, '').trim().toUpperCase();
+    const octava = parseInt(nombreNotaIngles.replace(/[^0-9]/g, '')) || 4;
+    if (letra === "DB") letra = "C#";
+    if (letra === "EB") letra = "D#";
+    if (letra === "GB") letra = "F#";
+    if (letra === "AB") letra = "G#";
+    if (letra === "BB") letra = "A#";
+    const frecuencia = (FRECUENCIAS_BASE_OCTAVA_0[letra] || 18.35) * Math.pow(2, octava);
+
+    const osc1 = audioContext.createOscillator();
+    const osc2 = audioContext.createOscillator();
+    const ganancia = audioContext.createGain();
+    osc1.type = 'sine';
+    osc2.type = 'sine';
+    osc1.frequency.value = frecuencia;
+    osc2.frequency.value = frecuencia * 2;
+
+    ganancia.gain.setValueAtTime(0.30, ahora);
+    ganancia.gain.setValueAtTime(0.30, ahora + Math.max(0, dur - 0.08));
+    ganancia.gain.exponentialRampToValueAtTime(0.0001, ahora + dur);
+
+    osc1.connect(ganancia);
+    osc2.connect(ganancia);
+    ganancia.connect(audioContext.destination);
+    osc1.start();
+    osc2.start();
+    osc1.stop(ahora + dur);
+    osc2.stop(ahora + dur);
+
+    sonidoEscuchaActual = { ganancia, osciladores: [osc1, osc2] };
+}
+
+// Apaga con un fundido corto la nota que esté sonando (al pausar o salir)
+function silenciarSonidoEscucha() {
+    if (!sonidoEscuchaActual || !audioContext) return;
+    const { ganancia, osciladores } = sonidoEscuchaActual;
+    sonidoEscuchaActual = null;
+    try {
+        const ahora = audioContext.currentTime;
+        ganancia.gain.cancelScheduledValues(ahora);
+        ganancia.gain.setValueAtTime(Math.max(ganancia.gain.value, 0.0001), ahora);
+        ganancia.gain.exponentialRampToValueAtTime(0.0001, ahora + 0.06);
+        osciladores.forEach(o => o.stop(ahora + 0.07));
+    } catch (e) { /* la nota ya había terminado */ }
+}
+
+function actualizarControlesEscucha() {
+    const caja = document.getElementById('controles-escucha');
+    caja.style.display = modoEscucha ? 'flex' : 'none';
+
+    const sonando = (estadoEscucha === 'reproduciendo');
+    document.getElementById('btn-pausa-escucha').style.display = sonando ? 'inline-block' : 'none';
+    document.getElementById('btn-seguir-escucha').style.display = sonando ? 'none' : 'inline-block';
+    document.getElementById('btn-entrenar-aqui').style.display = sonando ? 'none' : 'inline-block';
+
+    document.getElementById('btn-seguir-escucha').innerText =
+        (estadoEscucha === 'fin') ? '↺ Escuchar de nuevo' : '▶ Seguir escuchando';
+    document.getElementById('btn-entrenar-aqui').innerText =
+        (estadoEscucha === 'fin') ? '🎤 Entrenar desde el principio' : '🎤 Entrenar desde esta palabra';
+
+    const mensajes = { reproduciendo: '🎧 Escuchando...', pausada: '⏸ En pausa', fin: '🎧 Has escuchado toda la canción.' };
+    document.getElementById('evaluacion').innerText = mensajes[estadoEscucha] || '';
+}
+
+function iniciarEscuchaDesde(indicePalabra) {
+    cancelarTemporizadores();               // detiene cualquier sonido o temporizador previo
+    if (!FRASES_JUEGO[indicePalabra]) indicePalabra = 0;
+
+    modoEscucha = true;                     // (cancelarTemporizadores lo había desactivado)
+    estadoEscucha = 'reproduciendo';
+    fraseActualIndex = indicePalabra;
+    document.getElementById('zona-reinicio').style.display = 'none';
+    actualizarControlesEscucha();
+
+    relojEscucha = { t0: performance.now(), tiempoBase: FRASES_JUEGO[indicePalabra].tiempos[0] };
+    idGuia++;
+    reproducirPalabraEscucha(idGuia);
+}
+
+function reproducirPalabraEscucha(idEjecucion) {
+    if (!modoEscucha || idEjecucion !== idGuia || estadoEscucha !== 'reproduciendo') return;
+
+    if (fraseActualIndex >= FRASES_JUEGO.length) {
+        terminarEscucha();
+        return;
+    }
+
+    cargarNuevaFrasePalabra(true);          // dibuja la palabra sin lanzar la guía del entrenamiento
+    tocarNotaEscucha(0, idEjecucion);
+}
+
+function tocarNotaEscucha(i, idEjecucion) {
+    if (!modoEscucha || idEjecucion !== idGuia) return;
+    const palabra = FRASES_JUEGO[fraseActualIndex];
+
+    // Resaltar la nota que suena
+    for (let k = 0; k < palabra.notes.length; k++) {
+        const caja = document.getElementById(`caja-nota-${k}`);
+        if (caja) caja.className = (k === i) ? "nota-caja activa" : "nota-caja";
+    }
+    sonarNota(palabra.notesIngles[i], palabra.duraciones[i]);
+
+    // ¿Cuándo empieza la siguiente nota? (en esta palabra o en la que viene)
+    const esUltimaDePalabra = (i + 1 >= palabra.notes.length);
+    let tiempoSiguiente;
+    if (!esUltimaDePalabra) {
+        tiempoSiguiente = palabra.tiempos[i + 1];
+    } else {
+        const siguiente = FRASES_JUEGO[fraseActualIndex + 1];
+        tiempoSiguiente = siguiente ? siguiente.tiempos[0]
+                                    : palabra.tiempos[i] + (palabra.duraciones[i] || 0.4);
+    }
+
+    // Se calcula respecto al reloj de inicio para no acumular retraso nota a nota
+    const transcurridoMs = performance.now() - relojEscucha.t0;
+    const esperaMs = Math.max(0, (tiempoSiguiente - relojEscucha.tiempoBase) * 1000 - transcurridoMs);
+
+    temporizadorEscucha = setTimeout(() => {
+        if (!modoEscucha || idEjecucion !== idGuia) return;
+        if (!esUltimaDePalabra) {
+            tocarNotaEscucha(i + 1, idEjecucion);
+        } else {
+            fraseActualIndex++;
+            reproducirPalabraEscucha(idEjecucion);
+        }
+    }, esperaMs);
+}
+
+function pausarEscucha() {
+    if (!modoEscucha || estadoEscucha !== 'reproduciendo') return;
+    clearTimeout(temporizadorEscucha);
+    temporizadorEscucha = null;
+    idGuia++;                               // anula lo que quedara programado
+    silenciarSonidoEscucha();
+    estadoEscucha = 'pausada';              // fraseActualIndex = palabra en la que se paró
+    actualizarControlesEscucha();
+}
+
+function terminarEscucha() {
+    estadoEscucha = 'fin';
+    fraseActualIndex = 0;                   // "volver a escuchar" y "entrenar" parten del principio
+    palabraMostradaIndex = FRASES_JUEGO.length;   // la flecha ◀ lleva a la última palabra
+    actualizarFlechas();
+    document.getElementById('palabra-pantalla').innerText = "🎧 Fin de la canción";
+    document.getElementById('secuencia-visual').innerHTML = "";
+    actualizarControlesEscucha();
+}
+
+// Flechas ◀ ▶ durante la escucha
+function irAPalabraEnEscucha(nuevoIndice) {
+    if (estadoEscucha === 'reproduciendo') {
+        iniciarEscuchaDesde(nuevoIndice);   // sigue sonando desde la palabra elegida
+    } else {
+        // En pausa (o al final): solo se muestra la palabra y se mantiene la pausa
+        estadoEscucha = 'pausada';
+        fraseActualIndex = nuevoIndice;
+        cargarNuevaFrasePalabra(true);
+        actualizarControlesEscucha();
+    }
+}
+
+// Pasa del modo escucha al entrenamiento, empezando por la palabra en que se paró
+async function pasarAEntrenamiento() {
+    if (!modoEscucha) return;
+    const indice = fraseActualIndex;        // 0 si la escucha había terminado
+    cancelarTemporizadores();               // detiene todo y desactiva el modo escucha
+    document.getElementById('controles-escucha').style.display = 'none';
+    document.getElementById('evaluacion').innerText = "";
+
+    fraseActualIndex = indice;
+    notaSecuenciaIndex = 0;
+    muestrasConsecutivasBien = 0;
+    ultimaNotaValidadaTexto = "";
+
+    try {
+        await asegurarMicrofono();
+        // Si mientras tanto se volvió al menú, no se hace nada
+        if (document.getElementById('status-box').style.display !== 'block') return;
+
+        if (CANCIONES_AFINACION_LIBRE.includes(cancionActual)) {
+            iniciarCalibracion();           // primero se pide la primera nota; luego se empieza en esta palabra
+        } else {
+            cargarNuevaFrasePalabra();
+        }
+        if (!bucleAudioActivo) {
+            bucleAudioActivo = true;
+            bucleDeAudio();
+        }
+    } catch (err) {
+        document.getElementById('palabra-pantalla').innerText = "Error";
+        document.getElementById('evaluacion').innerHTML = `<span class='error'>❌ Error: ${err.message}</span>`;
+    }
+}
+
 function regresarAlMenu() {
     cancelarTemporizadores();
     document.getElementById('titulo-cancion').style.display = "none";
+    document.getElementById('controles-escucha').style.display = "none";
     document.getElementById('status-box').style.display = "none";
     document.getElementById('evaluacion').innerHTML = "";
     document.getElementById('secuencia-visual').innerHTML = "";
     document.getElementById('palabra-pantalla').innerText = "...";
     
     document.getElementById('zona-seleccion').style.display = "block";
-    document.getElementById('btn-comenzar').style.display = "inline-block";
+    document.getElementById('botones-inicio').style.display = "flex";
 }
