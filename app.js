@@ -328,8 +328,8 @@ function registrarTiempoPalabra(indice) {
     tiemposPalabras[indice] = Math.max(0, (performance.now() - inicioCantoMs) / 1000);
 }
 
-// Palabras que costaron claramente más (como mucho FEEDBACK_MAX_PALABRAS), en orden de aparición
-function palabrasParaRepasar() {
+// Palabras que pidieron claramente más tiempo, de mayor a menor
+function palabrasLentas() {
     const lentas = [];
     Object.keys(tiemposPalabras).forEach(clave => {
         const indice = Number(clave);
@@ -339,7 +339,22 @@ function palabrasParaRepasar() {
         if (tiemposPalabras[clave] > limite) lentas.push({ indice, exceso: tiemposPalabras[clave] / limite });
     });
     lentas.sort((a, b) => b.exceso - a.exceso);
-    return lentas.slice(0, FEEDBACK_MAX_PALABRAS).sort((a, b) => a.indice - b.indice);
+    return lentas;
+}
+
+// Como mucho unas pocas, en el orden de la canción, para no convertir el final en una lista
+function palabrasParaRepasar() {
+    return palabrasLentas().slice(0, FEEDBACK_MAX_PALABRAS).sort((a, b) => a.indice - b.indice);
+}
+
+function textoLogroFinal(cantadas, fluidas) {
+    if (cantadas > 0 && fluidas === cantadas) {
+        return 'Has llegado al final, y ha ido fluida. Si te apetece, repítela: la segunda vez suele sentarse mejor.';
+    }
+    if (cantadas > 0 && fluidas * 2 >= cantadas) {
+        return 'Has llegado al final. La mayor parte ha ido con soltura.';
+    }
+    return 'Has llegado al final. Eso ya es ensayar la pieza entera.';
 }
 
 function mostrarResumenFinal() {
@@ -347,15 +362,20 @@ function mostrarResumenFinal() {
     const resumen = document.createElement('div');
     resumen.className = 'resumen-final';
 
-    const titulo = document.createElement('div');
-    titulo.className = 'resumen-titulo';
+    const cantadas = Object.keys(tiemposPalabras).length;
+    const lentas = palabrasLentas();
+    const fluidas = Math.max(0, cantadas - lentas.length);
     const repasar = palabrasParaRepasar();
 
-    if (repasar.length === 0) {
-        titulo.innerText = '👍 Todo ha ido fluido';
-        resumen.appendChild(titulo);
-    } else {
-        titulo.innerText = 'Te costó un poco más:';
+    const logro = document.createElement('div');
+    logro.className = 'resumen-logro';
+    logro.innerText = textoLogroFinal(cantadas, fluidas);
+    resumen.appendChild(logro);
+
+    if (repasar.length > 0) {
+        const titulo = document.createElement('div');
+        titulo.className = 'resumen-titulo';
+        titulo.innerText = 'Si quieres seguir, estas se pueden repetir con calma:';
         resumen.appendChild(titulo);
 
         const fila = document.createElement('div');
@@ -372,12 +392,15 @@ function mostrarResumenFinal() {
             fila.appendChild(chip);
         });
         resumen.appendChild(fila);
-
-        const pista = document.createElement('div');
-        pista.className = 'resumen-pista';
-        pista.innerText = 'Pulsa una para repasarla.';
-        resumen.appendChild(pista);
     }
+
+    const cierre = document.createElement('div');
+    cierre.className = 'resumen-cierre';
+    cierre.innerText = repasar.length > 0
+        ? 'No tiene que salir a la primera. Volver a probar, sin forzar la voz, es lo que afina.'
+        : 'Cuando quieras, puedes repetirla o subir un poco la exigencia.';
+    resumen.appendChild(cierre);
+
     contenedor.appendChild(resumen);
 }
 
@@ -397,7 +420,7 @@ function cargarNuevaFrasePalabra(sinGuia = false) {
     if (fraseActualIndex >= FRASES_JUEGO.length) {
         document.getElementById('palabra-pantalla').innerText = "🎉 ¡COMPLETADO!";
         document.getElementById('secuencia-visual').innerHTML = "";
-        document.getElementById('evaluacion').innerHTML = "<span class='success'>¡Felicidades, cantaste todas las palabras correctamente!</span>";
+        document.getElementById('evaluacion').innerHTML = "<span class='success'>Pieza terminada. Buen trabajo.</span>";
         document.getElementById('zona-reinicio').style.display = "block";
         mostrarResumenFinal();
         return;

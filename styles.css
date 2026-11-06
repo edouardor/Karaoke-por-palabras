@@ -13,7 +13,7 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
         }
         .container {
@@ -262,8 +262,10 @@
 
 
 /* ===== Resumen ligero al final del entrenamiento ===== */
-.resumen-final { align-self: center; text-align: center; }
-.resumen-titulo { font-size: 18px; color: #eee; margin-bottom: 12px; }
+.resumen-final { align-self: center; text-align: center; max-width: 460px; }
+.resumen-logro { font-size: 17px; line-height: 1.4; color: #eee; margin-bottom: 14px; }
+.resumen-titulo { font-size: 15px; color: #ccc; margin-bottom: 12px; }
+.resumen-cierre { font-size: 14px; line-height: 1.4; color: #8a8f98; margin-top: 14px; }
 .resumen-palabras { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 .chip-repaso {
     background: #2a2a30;
