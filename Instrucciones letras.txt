@@ -1,0 +1,194 @@
+=====================================================================
+ CÓMO CREAR LA LETRA DE UNA CANCIÓN (Karaoke Adaptativo por Palabras)
+=====================================================================
+
+Cada canción necesita DOS archivos JSON dentro de la carpeta "canciones":
+
+    Nombre.json         -> las NOTAS (sale del MIDI de la voz de bajos)
+    Nombre txt.json     -> la LETRA, separada en sílabas (lo crea el script)
+
+Esta guía explica cómo preparar la letra y cómo darla de alta.
+
+
+---------------------------------------------------------------------
+ 1. REGLA DE ORO
+---------------------------------------------------------------------
+Cada SÍLABA de la letra es UNA NOTA del archivo de notas, en orden.
+
+    Nº de sílabas de la letra  =  Nº de notas del bajo
+
+Si no coinciden, la canción se desajusta:
+  - Si faltan notas: las últimas palabras no aparecen.
+  - Si sobran notas: las notas sobrantes se ignoran.
+
+Cómo contar las notas: abre "Nombre.json" en Visual Studio Code, pulsa
+Ctrl+F y busca  "midi"  (con las comillas). El buscador indica cuántas
+coincidencias hay: ese es el número de notas.
+
+Cómo contar las sílabas: al convertir, el script muestra el total de
+sílabas de cada canción (ver apartado 3).
+
+
+---------------------------------------------------------------------
+ 2. ESCRIBIR EL ARCHIVO .txt
+---------------------------------------------------------------------
+Crea un archivo de texto con el nombre de la canción, por ejemplo:
+
+    Salta Navideña.txt     (también vale  Salta_Navideña.txt)
+
+El nombre será el título que se muestra junto al nombre del coro (los
+guiones bajos se convierten en espacios).
+
+Escribe UNA LÍNEA POR VERSO, con las sílabas separadas por guiones y las
+palabras por espacios:
+
+    Va-mos a bus-car al ni-ño Jé-sus,
+    Que na-cen Be-lén y mue-ren la cruz,
+
+  - Una palabra de una sola sílaba va sin guiones:  "a", "al", "y".
+  - Se pueden usar tildes, ñ, comas y puntos (la puntuación no cuenta).
+  - Guarda el archivo con codificación UTF-8.
+
+
+---------------------------------------------------------------------
+ 3. NOTAS QUE SE CANTAN SOBRE UNA MISMA VOCAL (MELISMAS)
+---------------------------------------------------------------------
+Si una sílaba se canta sobre varias notas, repite la vocal con guiones:
+cada trozo cuenta como una nota.
+
+    ju-u-u-bi-lo      ->  5 notas: ju / u / u / bi / lo
+    o-o-or-ga-nis     ->  5 notas: o / o / or / ga / nis
+
+Esos trozos son los que aparecen escritos en las cajas de cada nota.
+
+
+---------------------------------------------------------------------
+ 4. TEXTO VISIBLE DISTINTO DE LO QUE SE CANTA (OPCIONAL)
+---------------------------------------------------------------------
+Si lo que se ve en pantalla debe ser distinto de la parte cantada, escribe
+detrás un "|" y el texto visible:
+
+    ca-an-ti-co-rum ju-u-u-bi-lo | Canticorum jubilo,
+    Va-mos a bus-car al ni-ño Jé-sus, | Vamos a buscar al niño Jesús,
+
+Reglas:
+  - El texto visible debe tener el MISMO número de palabras (separadas
+    por espacios) que la parte cantada.
+  - Para mostrar dos palabras sobre una sola palabra cantada, únelas con
+    un guion bajo "_":
+
+        Que na-cen Be-lén y mue-ren la cruz, | Que nace_en Belén y muere_en la cruz,
+
+    En pantalla se verá "nace en" y "muere en", pero se siguen cantando
+    na-cen y mue-ren (2 notas cada una).
+  - Si el número de palabras no coincide, el script avisa y se ignora el
+    texto visible de esa línea.
+  - AYUDAS DE PRONUNCIACIÓN: lo que vaya entre paréntesis en el texto
+    visible se muestra en azul y SIN los paréntesis, para indicar cómo se
+    pronuncia (por ejemplo, del italiano al español):
+
+        Nic(h)e          ->  Niche         (la h en azul)
+        (que)_un         ->  que un        ("que" en azul)
+        (cues)te_arene   ->  cueste arene  ("cues" en azul)
+
+    Bajo esas palabras aparece la leyenda "azul: cómo se pronuncia".
+
+
+---------------------------------------------------------------------
+ 5. CONVERTIR EL .txt EN JSON
+---------------------------------------------------------------------
+1. Copia el .txt en la MISMA carpeta que "convertidor letra a json.py".
+2. Abre una terminal en esa carpeta y ejecuta:
+
+       python "convertidor letra a json.py"
+
+   Se crea "Nombre txt.json" junto al .txt.
+
+   - Si ese JSON ya existe, el script lo salta para no sobrescribirlo.
+     Para regenerarlo después de cambiar el .txt:
+
+       python "convertidor letra a json.py" --forzar
+
+   - Los archivos cuyo nombre empieza por "Instrucciones" o "LEEME" (como
+     este) se ignoran.
+
+
+---------------------------------------------------------------------
+ 6. DAR DE ALTA LA CANCIÓN EN LA APLICACIÓN
+---------------------------------------------------------------------
+1. Copia a la carpeta "canciones":
+       Nombre.json   y   Nombre txt.json
+   Los dos deben llamarse igual (el de la letra termina en " txt.json").
+
+2. En index.html, añade la canción al selector:
+
+       <option value="Nombre">Título que se verá en la lista</option>
+
+   El "value" debe ser EXACTAMENTE el nombre de los archivos, sin
+   extensión. La primera opción de la lista es la que sale por defecto
+   (o la que lleve la palabra "selected").
+
+3. Recarga la página con Ctrl+F5 para que el navegador no use archivos
+   antiguos guardados en caché.
+
+Consejo: es más seguro evitar la ñ y los acentos en los NOMBRES DE ARCHIVO
+(por ejemplo, "Cumpleanos Feliz.json"). Si los llevan, la aplicación prueba
+las dos formas en que los sistemas escriben la ñ, así que suele funcionar
+igualmente. El título que se muestra sale de la letra y puede llevar ñ.
+
+
+---------------------------------------------------------------------
+ 7. SI LA MÚSICA SE REPITE CON OTRA LETRA
+---------------------------------------------------------------------
+El archivo de notas debe contener las notas en el ORDEN EN QUE SE CANTAN.
+Si, por ejemplo, la segunda y la tercera línea se cantan sobre la misma
+música, el JSON de notas tiene que incluir esa música dos veces, una por
+cada línea de letra (así está hecho "Canticorum Jubilo").
+
+
+---------------------------------------------------------------------
+ 8. AJUSTES OPCIONALES POR CANCIÓN (en app.js)
+---------------------------------------------------------------------
+Al principio de app.js hay dos listas:
+
+  CANCIONES_AFINACION_LIBRE
+      Canciones en las que el usuario canta primero su primera nota y la
+      melodía se transpone a ella. Ejemplo: "Cumpleanos Feliz".
+
+  DIFICULTAD_POR_CANCION
+      Exigencia de afinación (en cents) que se propone al elegir la
+      canción:  15 = Profesional, 30 = Coral, 45 = Fácil, 60 = Muy fácil.
+
+El nombre que se escribe en ellas es el mismo "value" del selector.
+
+
+---------------------------------------------------------------------
+ 9. PROBLEMAS FRECUENTES
+---------------------------------------------------------------------
+  - "Archivos JSON no encontrados": el nombre del "value" del selector no
+    coincide con el de los archivos, o falta alguno de los dos JSON, o no
+    están en la carpeta "canciones".
+  - Faltan palabras al final o hay notas sin letra: el número de sílabas
+    no coincide con el de notas (regla de oro).
+  - Se ve "caanticorum" en lugar de "Canticorum": hay melismas y falta el
+    texto visible (apartado 4).
+  - El texto visible no se aplica: no tiene el mismo número de palabras
+    que la parte cantada; el script lo avisa al convertir.
+  - Los cambios no se ven: recarga con Ctrl+F5.
+
+
+---------------------------------------------------------------------
+ 10. SILENCIOS LARGOS EN EL MODO ESCUCHA SOLO
+---------------------------------------------------------------------
+En el modo escucha solo la canción suena con el ritmo real del MIDI,
+incluidos los silencios. Si entre dos palabras hay un silencio de más de
+3 segundos (por ejemplo, un pasaje en el que los bajos no cantan), la
+pantalla muestra "Aquí no cantamos" con una cuenta atrás y la palabra con
+la que se vuelve a cantar.
+
+No hay que escribir nada en la letra: se detecta solo, a partir de los
+tiempos del archivo de notas. Para cambiar los 3 segundos, edita
+UMBRAL_SILENCIO_ESCUCHA al principio de app.js.
+
+En el modo entrenamiento no se espera en los silencios: pasa directamente
+a la siguiente palabra.

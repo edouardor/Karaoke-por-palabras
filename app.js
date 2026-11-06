@@ -12,11 +12,19 @@ let temporizadorSiguientePalabra = null; // pausa de 800 ms tras acertar una pal
 let idGuia = 0;                          // identifica la reproducción de guía vigente
 let esperandoSiguientePalabra = false;   // pausa del micro entre una palabra acertada y la siguiente
 // ---- Modo escucha solo ----
+// ---- Guía sonora del modo entrenamiento ----
+const GUIA_PROPORCION_SOSTENIDO = 0.85;  // cada nota suena al menos el 85 % del tiempo hasta la siguiente...
+const GUIA_SOSTENIDO_MAXIMO = 0.6;       // ...pero sin alargarla más de 0,6 s por encima de su duración original
+const GUIA_DURACION_MINIMA_ULTIMA = 0.35; // y la última nota de cada palabra suena al menos 0,35 s
+
+const UMBRAL_SILENCIO_ESCUCHA = 3;       // segundos: a partir de aquí se avisa "Aquí no cantamos"
 let modoEscucha = false;                 // true mientras se está en el modo escucha
 let estadoEscucha = 'reproduciendo';     // 'reproduciendo' | 'pausada' | 'fin'
 let temporizadorEscucha = null;          // temporizador de la siguiente nota
 let relojEscucha = { t0: 0, tiempoBase: 0 }; // referencia para no acumular retraso
 let sonidoEscuchaActual = null;          // última nota sonando (para silenciarla al pausar)
+let enSilencio = false;                  // true mientras se muestra "Aquí no cantamos"
+let intervaloSilencio = null;            // actualiza la cuenta atrás del silencio
 let cancionActual = "";                  // canción elegida (para pasar de escucha a entrenamiento)
 
 let bucleAudioActivo = false;            // evita arrancar varios bucles de audio a la vez
@@ -94,6 +102,18 @@ function autoCorrelacion(buffer, sampleRate) {
     if (a) T0 = T0 - b / (2 * a);
     return sampleRate / T0;
 }
+// Carga un archivo de la carpeta "canciones". Si falla, prueba las otras formas de escribir
+// la ñ y las tildes (NFC/NFD), que cambian según el sistema operativo con el que se creó el archivo.
+async function cargarArchivoCancion(nombreArchivo) {
+    const variantes = [...new Set([nombreArchivo, nombreArchivo.normalize('NFC'), nombreArchivo.normalize('NFD')])];
+    let respuesta;
+    for (const nombre of variantes) {
+        respuesta = await fetch(`./canciones/${nombre}`);
+        if (respuesta.ok) return respuesta;
+    }
+    return respuesta;
+}
+
 async function iniciarApp(modo = 'entrenamiento') {
     try {
         cancelarTemporizadores();
@@ -105,7 +125,7 @@ async function iniciarApp(modo = 'entrenamiento') {
 
         toleranciaCentsConfigurada = parseInt(document.getElementById('selector-dificultad').value) || 45;
 
-        const cancionSeleccionada = document.getElementById('selector-cancion').value;
+        const cancionSeleccionada = document.getElementById('selector-cancion').value.trim();
         cancionActual = cancionSeleccionada;
         document.getElementById('botones-inicio').style.display = 'none';
         document.getElementById('zona-seleccion').style.display = 'none';
@@ -113,11 +133,16 @@ async function iniciarApp(modo = 'entrenamiento') {
         document.getElementById('status-box').style.display = 'block';
 
         const [resNotas, resTexto] = await Promise.all([
-            fetch(`./canciones/${cancionSeleccionada}.json`),
-            fetch(`./canciones/${cancionSeleccionada} txt.json`) 
+            cargarArchivoCancion(`${cancionSeleccionada}.json`),
+            cargarArchivoCancion(`${cancionSeleccionada} txt.json`)
         ]);
 
-        if (!resNotas.ok || !resTexto.ok) throw new Error("Archivos JSON no encontrados.");
+        if (!resNotas.ok || !resTexto.ok) {
+            const faltan = [];
+            if (!resNotas.ok) faltan.push(`«${cancionSeleccionada}.json»`);
+            if (!resTexto.ok) faltan.push(`«${cancionSeleccionada} txt.json»`);
+            throw new Error(`No se encuentra ${faltan.join(' ni ')} en la carpeta "canciones". Revisa que el nombre coincida exactamente.`);
+        }
 
         const datosNotas = await resNotas.json();
         let datosTexto = await resTexto.json();
@@ -173,8 +198,13 @@ async function iniciarApp(modo = 'entrenamiento') {
             const palabrasVisibles = (linea.texto_visible || "").split(/\s+/).filter(Boolean);
             palabrasFrase.forEach((palBase, idxPalabra) => {
                 let palabraLimpia = palBase.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
+                let palabraMarcada = null;   // versión con (ayudas de pronunciación) entre paréntesis
                 if (palabrasVisibles.length === palabrasFrase.length) {
-                    palabraLimpia = palabrasVisibles[idxPalabra].replace(/_/g, " ").replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
+                    const visible = palabrasVisibles[idxPalabra].replace(/_/g, " ");
+                    palabraLimpia = visible.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
+                    if (/\([^)]*\)/.test(visible)) {
+                        palabraMarcada = visible.replace(/[.,\/#!$%\^&\*;:{}=\-_`~]/g,"");
+                    }
                 }
                 let numeroSilabas = (palBase.match(/-/g) || []).length + 1;
                 let silabasLista = palBase.replace(/[.,\/#!$%\^&\*;:{}=_`~()]/g,"").split("-");
@@ -199,6 +229,7 @@ async function iniciarApp(modo = 'entrenamiento') {
                 if (notasDeEstaPalabra.length > 0) {
                     FRASES_JUEGO.push({
                         palabra: palabraLimpia,
+                        palabraMarcada: palabraMarcada,
                         notes: notasDeEstaPalabra,
                         notesIngles: notasInglesDeEstaPalabra,
                         duraciones: duracionesDeEstaPalabra,
@@ -238,6 +269,14 @@ async function iniciarApp(modo = 'entrenamiento') {
         document.getElementById('evaluacion').innerHTML = `<span class='error'>❌ Error: ${err.message}</span>`;
     }
 }
+// Convierte "Nic(h)e" en HTML donde lo que va entre paréntesis (ayuda de pronunciación)
+// se muestra en otro color y sin los paréntesis. El resto del texto se escapa.
+function htmlPalabraConPronunciacion(texto) {
+    const seguro = texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return seguro.replace(/\(([^)]*)\)/g, '<span class="pron">$1</span>') +
+           '<small class="leyenda-pron">azul: cómo se pronuncia</small>';
+}
+
 function cargarNuevaFrasePalabra(sinGuia = false) {
     esperandoSiguientePalabra = false;
     palabraMostradaIndex = fraseActualIndex;
@@ -256,7 +295,12 @@ function cargarNuevaFrasePalabra(sinGuia = false) {
     ultimaNotaValidadaTexto = "";
     
     const datosFrase = FRASES_JUEGO[fraseActualIndex];
-    document.getElementById('palabra-pantalla').innerText = datosFrase.palabra;
+    const pantallaPalabra = document.getElementById('palabra-pantalla');
+    if (datosFrase.palabraMarcada) {
+        pantallaPalabra.innerHTML = htmlPalabraConPronunciacion(datosFrase.palabraMarcada);
+    } else {
+        pantallaPalabra.innerText = datosFrase.palabra;
+    }
     
     let contenedorVisual = document.getElementById('secuencia-visual');
     contenedorVisual.innerHTML = "";
@@ -329,7 +373,7 @@ function cargarNuevaFrasePalabra(sinGuia = false) {
 
     if (!sinGuia) {
         idGuia++;
-        reproducirCadenaNotasGuia(datosFrase.notesIngles, datosFrase.duraciones, 0, idGuia);
+        reproducirCadenaNotasGuia(datosFrase.notesIngles, datosFrase.duraciones, 0, idGuia, datosFrase.tiempos);
     }
 }
 
@@ -346,6 +390,7 @@ function cancelarTemporizadores() {
     esperandoSiguientePalabra = false;
     clearTimeout(temporizadorEscucha);
     temporizadorEscucha = null;
+    limpiarSilencioEscucha();
     silenciarSonidoEscucha();
     modoEscucha = false;
 }
@@ -370,8 +415,10 @@ function irAPalabra(nuevoIndice) {
     cargarNuevaFrasePalabra();
 }
 
-function irAPalabraAnterior() { irAPalabra(palabraMostradaIndex - 1); }
-function irAPalabraSiguiente() { irAPalabra(palabraMostradaIndex + 1); }
+// Durante un silencio largo (modo escucha), fraseActualIndex ya apunta a la palabra que viene después:
+// ◀ vuelve a la última palabra cantada y ▶ salta el silencio.
+function irAPalabraAnterior() { irAPalabra(modoEscucha && enSilencio ? fraseActualIndex - 1 : palabraMostradaIndex - 1); }
+function irAPalabraSiguiente() { irAPalabra(modoEscucha && enSilencio ? fraseActualIndex : palabraMostradaIndex + 1); }
 
 // Atajos de teclado: ← y →
 document.addEventListener('keydown', (e) => {
@@ -380,7 +427,7 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowRight') irAPalabraSiguiente();
 });
 
-function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota, idEjecucion) {
+function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota, idEjecucion, listaTiempos, inicioMs) {
     if (idEjecucion !== idGuia) return; // se navegó a otra palabra: esta guía ya no vale
     if (indiceNota >= listaNotas.length) {
         setTimeout(() => { 
@@ -388,49 +435,38 @@ function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota, idEj
         }, 300);
         return;
     }
-    
-    reproduciendoGuia = true;
-    const nombreNotaIngles = listaNotas[indiceNota];
-    const duracionOriginal = listaDuraciones[indiceNota] || 0.4;
-    
-    const osciladorBase = audioContext.createOscillator();
-    const osciladorHarmonico = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    
-    osciladorBase.type = 'sine';       
-    osciladorHarmonico.type = 'sine';  
-    
-    let notaLetra = nombreNotaIngles.replace(/[0-9]/g, '').trim().toUpperCase();
-    let numeroOctava = parseInt(nombreNotaIngles.replace(/[^0-9]/g, '')) || 4;
-    
-    if (notaLetra === "DB") notaLetra = "C#";
-    if (notaLetra === "EB") notaLetra = "D#";
-    if (notaLetra === "GB") notaLetra = "F#";
-    if (notaLetra === "AB") notaLetra = "G#";
-    if (notaLetra === "BB") notaLetra = "A#";
 
-    let hzBase = FRECUENCIAS_BASE_OCTAVA_0[notaLetra] || 18.35; 
-    let frecuenciaCalculada = hzBase * Math.pow(2, numeroOctava);
-    
-    osciladorBase.frequency.value = frecuenciaCalculada;
-    osciladorHarmonico.frequency.value = frecuenciaCalculada * 2;
-    
-    gainNode.gain.setValueAtTime(0.30, audioContext.currentTime);
-    gainNode.gain.setValueAtTime(0.30, audioContext.currentTime + duracionOriginal - 0.08);
-    gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + duracionOriginal);
-    
-    osciladorBase.connect(gainNode);
-    osciladorHarmonico.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    osciladorBase.start();
-    osciladorHarmonico.start();
-    osciladorBase.stop(audioContext.currentTime + duracionOriginal);
-    osciladorHarmonico.stop(audioContext.currentTime + duracionOriginal);
-    
+    reproduciendoGuia = true;
+
+    // Si no hay instantes de inicio, se encadenan las duraciones
+    if (!listaTiempos) {
+        listaTiempos = [];
+        let acumulado = 0;
+        listaDuraciones.forEach(d => { listaTiempos.push(acumulado); acumulado += (d || 0.4); });
+    }
+    if (inicioMs === undefined) inicioMs = performance.now();   // referencia del reloj (primera nota)
+
+    const duracionOriginal = listaDuraciones[indiceNota] || 0.4;
+    const esUltima = (indiceNota + 1 >= listaNotas.length);
+
+    // Cuánto suena la nota: su duración original, alargada algo (sin pasarse) para oírla mejor
+    let sonido = duracionOriginal;
+    if (esUltima) {
+        sonido = Math.max(duracionOriginal, GUIA_DURACION_MINIMA_ULTIMA);
+    } else {
+        const hastaSiguiente = listaTiempos[indiceNota + 1] - listaTiempos[indiceNota];
+        sonido = Math.max(duracionOriginal, Math.min(GUIA_PROPORCION_SOSTENIDO * hastaSiguiente, GUIA_SOSTENIDO_MAXIMO));
+    }
+    sonarNota(listaNotas[indiceNota], sonido);
+
+    // La siguiente nota empieza cuando le toca según el MIDI (no cuando acaba ésta):
+    // así se conservan el ritmo y los silencios. Se mide desde el inicio para no acumular retraso.
+    const tiempoSiguiente = esUltima ? (listaTiempos[indiceNota] + sonido) : listaTiempos[indiceNota + 1];
+    const esperaMs = Math.max(0, (tiempoSiguiente - listaTiempos[0]) * 1000 - (performance.now() - inicioMs));
+
     setTimeout(() => {
-        reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota + 1, idEjecucion);
-    }, duracionOriginal * 1000);
+        reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota + 1, idEjecucion, listaTiempos, inicioMs);
+    }, esperaMs);
 }
 
 function tocarNotaIndividualUsuario(nombreNotaIngles, elementoCaja, idxSilaba, idxPalabra) {
@@ -709,7 +745,7 @@ function transponerCancionAPrimeraNota(midiPrimeraNota) {
 // ==========================================
 function alCambiarCancion() {
     const slider = document.getElementById('selector-dificultad');
-    const cancion = document.getElementById('selector-cancion').value;
+    const cancion = document.getElementById('selector-cancion').value.trim();
 
     if (cancion in DIFICULTAD_POR_CANCION) {
         if (dificultadPreviaUsuario === null) dificultadPreviaUsuario = slider.value;
@@ -839,6 +875,8 @@ function iniciarEscuchaDesde(indicePalabra) {
 function reproducirPalabraEscucha(idEjecucion) {
     if (!modoEscucha || idEjecucion !== idGuia || estadoEscucha !== 'reproduciendo') return;
 
+    limpiarSilencioEscucha();               // si veníamos de un silencio, se quita el aviso
+
     if (fraseActualIndex >= FRASES_JUEGO.length) {
         terminarEscucha();
         return;
@@ -846,6 +884,17 @@ function reproducirPalabraEscucha(idEjecucion) {
 
     cargarNuevaFrasePalabra(true);          // dibuja la palabra sin lanzar la guía del entrenamiento
     tocarNotaEscucha(0, idEjecucion);
+}
+
+// Programa una acción para un instante de la canción (en segundos del MIDI).
+// Se calcula respecto al reloj de inicio para no acumular retraso nota a nota.
+function programarEscucha(tiempoObjetivo, accion, idEjecucion) {
+    const transcurridoMs = performance.now() - relojEscucha.t0;
+    const esperaMs = Math.max(0, (tiempoObjetivo - relojEscucha.tiempoBase) * 1000 - transcurridoMs);
+    temporizadorEscucha = setTimeout(() => {
+        if (!modoEscucha || idEjecucion !== idGuia) return;
+        accion();
+    }, esperaMs);
 }
 
 function tocarNotaEscucha(i, idEjecucion) {
@@ -861,41 +910,70 @@ function tocarNotaEscucha(i, idEjecucion) {
 
     // ¿Cuándo empieza la siguiente nota? (en esta palabra o en la que viene)
     const esUltimaDePalabra = (i + 1 >= palabra.notes.length);
-    let tiempoSiguiente;
+    const siguiente = FRASES_JUEGO[fraseActualIndex + 1];
+    const finNota = palabra.tiempos[i] + (palabra.duraciones[i] || 0.4);
+    const tiempoSiguiente = !esUltimaDePalabra ? palabra.tiempos[i + 1]
+                          : (siguiente ? siguiente.tiempos[0] : finNota);
+
     if (!esUltimaDePalabra) {
-        tiempoSiguiente = palabra.tiempos[i + 1];
+        programarEscucha(tiempoSiguiente, () => tocarNotaEscucha(i + 1, idEjecucion), idEjecucion);
+    } else if (siguiente && (tiempoSiguiente - finNota) > UMBRAL_SILENCIO_ESCUCHA) {
+        // Silencio largo: al terminar la nota se avisa y se cuenta atrás hasta la siguiente palabra
+        programarEscucha(finNota, () => {
+            mostrarSilencioEscucha(tiempoSiguiente);
+            programarEscucha(tiempoSiguiente, () => reproducirPalabraEscucha(idEjecucion), idEjecucion);
+        }, idEjecucion);
     } else {
-        const siguiente = FRASES_JUEGO[fraseActualIndex + 1];
-        tiempoSiguiente = siguiente ? siguiente.tiempos[0]
-                                    : palabra.tiempos[i] + (palabra.duraciones[i] || 0.4);
-    }
-
-    // Se calcula respecto al reloj de inicio para no acumular retraso nota a nota
-    const transcurridoMs = performance.now() - relojEscucha.t0;
-    const esperaMs = Math.max(0, (tiempoSiguiente - relojEscucha.tiempoBase) * 1000 - transcurridoMs);
-
-    temporizadorEscucha = setTimeout(() => {
-        if (!modoEscucha || idEjecucion !== idGuia) return;
-        if (!esUltimaDePalabra) {
-            tocarNotaEscucha(i + 1, idEjecucion);
-        } else {
+        programarEscucha(tiempoSiguiente, () => {
             fraseActualIndex++;
             reproducirPalabraEscucha(idEjecucion);
-        }
-    }, esperaMs);
+        }, idEjecucion);
+    }
+}
+
+// Muestra "Aquí no cantamos" con una cuenta atrás hasta que vuelve a haber que cantar
+function mostrarSilencioEscucha(tiempoSiguiente) {
+    enSilencio = true;
+    fraseActualIndex++;                     // apunta a la palabra que se cantará al volver
+    const siguiente = FRASES_JUEGO[fraseActualIndex];
+    const finMs = relojEscucha.t0 + (tiempoSiguiente - relojEscucha.tiempoBase) * 1000;
+
+    const pantalla = document.getElementById('palabra-pantalla');
+    pantalla.className = "palabra-actual silencio";
+    pantalla.innerText = "🤫 Aquí no cantamos";
+
+    const dibujar = () => {
+        const restante = Math.max(1, Math.ceil((finMs - performance.now()) / 1000));
+        document.getElementById('secuencia-visual').innerHTML =
+            `<div style='font-size:18px; color:#aaa;'>Seguimos con «${siguiente.palabra}» en ${restante} s</div>`;
+    };
+    dibujar();
+    intervaloSilencio = setInterval(dibujar, 250);
+}
+
+function limpiarSilencioEscucha() {
+    clearInterval(intervaloSilencio);
+    intervaloSilencio = null;
+    enSilencio = false;
+    const pantalla = document.getElementById('palabra-pantalla');
+    if (pantalla) pantalla.className = "palabra-actual";
 }
 
 function pausarEscucha() {
     if (!modoEscucha || estadoEscucha !== 'reproduciendo') return;
+    const estabaEnSilencio = enSilencio;
     clearTimeout(temporizadorEscucha);
     temporizadorEscucha = null;
     idGuia++;                               // anula lo que quedara programado
+    limpiarSilencioEscucha();
     silenciarSonidoEscucha();
     estadoEscucha = 'pausada';              // fraseActualIndex = palabra en la que se paró
+    if (estabaEnSilencio) cargarNuevaFrasePalabra(true);   // se muestra la palabra que vendría tras el silencio
     actualizarControlesEscucha();
 }
 
 function terminarEscucha() {
+    limpiarSilencioEscucha();
     estadoEscucha = 'fin';
     fraseActualIndex = 0;                   // "volver a escuchar" y "entrenar" parten del principio
     palabraMostradaIndex = FRASES_JUEGO.length;   // la flecha ◀ lleva a la última palabra

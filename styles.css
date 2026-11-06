@@ -150,3 +150,30 @@
     margin-top: 20px;
 }
 .controles-escucha button { padding: 12px 22px; font-size: 16px; }
+
+
+/* ===== Aviso de silencio largo en el modo escucha ===== */
+.palabra-actual.silencio {
+    color: #b0bec5;
+    font-size: 34px;
+    text-shadow: none;
+}
+
+
+/* ===== Ayudas de pronunciación: lo que va entre paréntesis en texto_visible ===== */
+.navegacion-palabra .palabra-actual { position: relative; }
+.pron {
+    color: #4fc3f7;
+    text-shadow: 0 0 12px rgba(79,195,247,0.45);
+}
+.leyenda-pron {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -22px;
+    font-size: 13px;
+    font-weight: normal;
+    color: #8a8f98;
+    text-shadow: none;
+    letter-spacing: 0.3px;
+}
