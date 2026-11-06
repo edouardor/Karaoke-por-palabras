@@ -12,6 +12,13 @@ let temporizadorSiguientePalabra = null; // pausa de 800 ms tras acertar una pal
 let idGuia = 0;                          // identifica la reproducción de guía vigente
 let esperandoSiguientePalabra = false;   // pausa del micro entre una palabra acertada y la siguiente
 // ---- Modo escucha solo ----
+// ---- Feedback ligero al final del entrenamiento ----
+const FEEDBACK_SEGUNDOS_LENTA = 10;      // una palabra "costó más" si se tardó más de esto (o 3 veces su duración musical)
+const FEEDBACK_MAX_PALABRAS = 3;         // como mucho, estas palabras se sugieren para repasar
+let tiemposPalabras = {};                // índice de palabra -> segundos que costó cantarla
+let inicioCantoMs = 0;                   // instante en que terminó la guía y se esperaba el canto
+let repasoActivo = false;                // true mientras se repasa una palabra desde el resumen final
+
 // ---- Guía sonora del modo entrenamiento ----
 const GUIA_PROPORCION_SOSTENIDO = 0.85;  // cada nota suena al menos el 85 % del tiempo hasta la siguiente...
 const GUIA_SOSTENIDO_MAXIMO = 0.6;       // ...pero sin alargarla más de 0,6 s por encima de su duración original
@@ -47,10 +54,10 @@ const NOMBRES_NOTA_ESPANOL = ["Do","Do#","Re","Re#","Mi","Fa","Fa#","Sol","Sol#"
 
 function actualizarTextoDificultad(valor) {
     const txt = document.getElementById('txt-dificultad');
-    if(valor == "15") txt.innerHTML = "Profesional 🎯";
-    if(valor == "30") txt.innerHTML = "Coral 🎙️";
-    if(valor == "45") txt.innerHTML = "Fácil ☕";
-    if(valor == "60") txt.innerHTML = "Iniciación / Muy Fácil 👶";
+    if(valor == "15") txt.innerHTML = "Profesional (±15 cents) 🎯";
+    if(valor == "30") txt.innerHTML = "Coral (±30 cents) 🎙️";
+    if(valor == "45") txt.innerHTML = "Fácil (±45 cents) ☕";
+    if(valor == "60") txt.innerHTML = "Iniciación / Muy Fácil (±60 cents) 👶";
 }
 
 let audioContext;
@@ -102,21 +109,47 @@ function autoCorrelacion(buffer, sampleRate) {
     if (a) T0 = T0 - b / (2 * a);
     return sampleRate / T0;
 }
-// Carga un archivo de la carpeta "canciones". Si falla, prueba las otras formas de escribir
-// la ñ y las tildes (NFC/NFD), que cambian según el sistema operativo con el que se creó el archivo.
+// Varias formas de pedir el mismo archivo: con ñ/tildes en NFC o NFD, y con el
+// nombre escapado. Si una petición se corta ("Failed to fetch"), se prueba la siguiente.
+function urlsCancion(nombreArchivo) {
+    const formas = [...new Set([
+        nombreArchivo,
+        nombreArchivo.normalize('NFC'),
+        nombreArchivo.normalize('NFD')
+    ])];
+    const urls = [];
+    formas.forEach(nombre => {
+        urls.push(`./canciones/${nombre}`);
+        urls.push(`./canciones/${encodeURIComponent(nombre)}`);
+    });
+    return [...new Set(urls)];
+}
+
 async function cargarArchivoCancion(nombreArchivo) {
-    const variantes = [...new Set([nombreArchivo, nombreArchivo.normalize('NFC'), nombreArchivo.normalize('NFD')])];
-    let respuesta;
-    for (const nombre of variantes) {
-        respuesta = await fetch(`./canciones/${nombre}`);
-        if (respuesta.ok) return respuesta;
+    let ultimoStatus = null;
+    let falloRed = null;
+    for (const url of urlsCancion(nombreArchivo)) {
+        try {
+            const respuesta = await fetch(url);
+            if (respuesta.ok) return respuesta;
+            ultimoStatus = respuesta.status;
+        } catch (e) {
+            falloRed = e;
+        }
     }
-    return respuesta;
+    if (falloRed && ultimoStatus === null) {
+        if (location.protocol === 'file:') {
+            throw new Error('La página está abierta como archivo. Ábrela desde Live Server, en http://127.0.0.1:5500, para poder cargar las canciones.');
+        }
+        throw new Error(`No se pudo leer «${nombreArchivo}»: ${falloRed.message}`);
+    }
+    return { ok: false, status: ultimoStatus };
 }
 
 async function iniciarApp(modo = 'entrenamiento') {
     try {
         cancelarTemporizadores();
+        tiemposPalabras = {};
         FRASES_JUEGO = [];
         fraseActualIndex = 0;
         notaSecuenciaIndex = 0;
@@ -269,6 +302,79 @@ async function iniciarApp(modo = 'entrenamiento') {
         document.getElementById('evaluacion').innerHTML = `<span class='error'>❌ Error: ${err.message}</span>`;
     }
 }
+// ==========================================
+// FEEDBACK LIGERO AL FINAL DEL ENTRENAMIENTO
+// ==========================================
+// Duración musical de una palabra (de su primera nota al final de la última), en segundos
+function duracionMusicalPalabra(datos) {
+    const n = datos.tiempos.length;
+    return (datos.tiempos[n - 1] - datos.tiempos[0]) + (datos.duraciones[n - 1] || 0.4);
+}
+
+// Lo que tarda aproximadamente la guía sonora de una palabra, en milisegundos
+function duracionGuiaMs(datos) {
+    const n = datos.tiempos.length;
+    const ultima = Math.max(datos.duraciones[n - 1] || 0.4, GUIA_DURACION_MINIMA_ULTIMA);
+    return ((datos.tiempos[n - 1] - datos.tiempos[0]) + ultima + 0.3) * 1000;
+}
+
+function registrarTiempoPalabra(indice) {
+    tiemposPalabras[indice] = Math.max(0, (performance.now() - inicioCantoMs) / 1000);
+}
+
+// Palabras que costaron claramente más (como mucho FEEDBACK_MAX_PALABRAS), en orden de aparición
+function palabrasParaRepasar() {
+    const lentas = [];
+    Object.keys(tiemposPalabras).forEach(clave => {
+        const indice = Number(clave);
+        const datos = FRASES_JUEGO[indice];
+        if (!datos) return;
+        const limite = Math.max(FEEDBACK_SEGUNDOS_LENTA, 3 * duracionMusicalPalabra(datos));
+        if (tiemposPalabras[clave] > limite) lentas.push({ indice, exceso: tiemposPalabras[clave] / limite });
+    });
+    lentas.sort((a, b) => b.exceso - a.exceso);
+    return lentas.slice(0, FEEDBACK_MAX_PALABRAS).sort((a, b) => a.indice - b.indice);
+}
+
+function mostrarResumenFinal() {
+    const contenedor = document.getElementById('secuencia-visual');
+    const resumen = document.createElement('div');
+    resumen.className = 'resumen-final';
+
+    const titulo = document.createElement('div');
+    titulo.className = 'resumen-titulo';
+    const repasar = palabrasParaRepasar();
+
+    if (repasar.length === 0) {
+        titulo.innerText = '👍 Todo ha ido fluido';
+        resumen.appendChild(titulo);
+    } else {
+        titulo.innerText = 'Te costó un poco más:';
+        resumen.appendChild(titulo);
+
+        const fila = document.createElement('div');
+        fila.className = 'resumen-palabras';
+        repasar.forEach(item => {
+            const chip = document.createElement('button');
+            chip.className = 'chip-repaso';
+            chip.innerText = FRASES_JUEGO[item.indice].palabra;
+            chip.title = 'Repasar esta palabra';
+            chip.onclick = () => {
+                irAPalabra(item.indice);
+                repasoActivo = true;      // al acertarla se vuelve a este resumen
+            };
+            fila.appendChild(chip);
+        });
+        resumen.appendChild(fila);
+
+        const pista = document.createElement('div');
+        pista.className = 'resumen-pista';
+        pista.innerText = 'Pulsa una para repasarla.';
+        resumen.appendChild(pista);
+    }
+    contenedor.appendChild(resumen);
+}
+
 // Convierte "Nic(h)e" en HTML donde lo que va entre paréntesis (ayuda de pronunciación)
 // se muestra en otro color y sin los paréntesis. El resto del texto se escapa.
 function htmlPalabraConPronunciacion(texto) {
@@ -287,6 +393,7 @@ function cargarNuevaFrasePalabra(sinGuia = false) {
         document.getElementById('secuencia-visual').innerHTML = "";
         document.getElementById('evaluacion').innerHTML = "<span class='success'>¡Felicidades, cantaste todas las palabras correctamente!</span>";
         document.getElementById('zona-reinicio').style.display = "block";
+        mostrarResumenFinal();
         return;
     }
     
@@ -334,6 +441,14 @@ function cargarNuevaFrasePalabra(sinGuia = false) {
         cajaNota.className = `nota-caja ${idx === 0 ? 'activa' : ''}`;
         cajaNota.id = `caja-nota-${idx}`;
         cajaNota.innerText = notaEspanol;
+
+        let flechaAguda = document.createElement('div');
+        flechaAguda.className = "flecha-afinacion flecha-aguda";
+        flechaAguda.setAttribute("aria-hidden", "true");
+
+        let flechaGrave = document.createElement('div');
+        flechaGrave.className = "flecha-afinacion flecha-grave";
+        flechaGrave.setAttribute("aria-hidden", "true");
         cajaNota.style.cursor = "pointer";
         
         cajaNota.onclick = () => {
@@ -367,11 +482,14 @@ function cargarNuevaFrasePalabra(sinGuia = false) {
         }
         
         bloque.appendChild(divSilaba);
+        bloque.appendChild(flechaAguda);
         bloque.appendChild(cajaNota);
+        bloque.appendChild(flechaGrave);
         contenedorVisual.appendChild(bloque);
     });
 
     if (!sinGuia) {
+        inicioCantoMs = performance.now() + duracionGuiaMs(datosFrase);
         idGuia++;
         reproducirCadenaNotasGuia(datosFrase.notesIngles, datosFrase.duraciones, 0, idGuia, datosFrase.tiempos);
     }
@@ -393,6 +511,7 @@ function cancelarTemporizadores() {
     limpiarSilencioEscucha();
     silenciarSonidoEscucha();
     modoEscucha = false;
+    repasoActivo = false;
 }
 
 function actualizarFlechas() {
@@ -538,7 +657,26 @@ function reiniciarDesdeSilaba(idxSilaba, idxPalabra) {
     notaSecuenciaIndex = idxSilaba;
     muestrasConsecutivasBien = 0;
     ultimaNotaValidadaTexto = "";
+    limpiarDireccionesAfinacion();
     document.getElementById('evaluacion').innerText = "";
+}
+
+// ▼ encima de la celda si la voz va aguda; ▲ debajo si va grave.
+// Dentro de la tolerancia no se muestra ninguna.
+function marcarDireccionAfinacion(caja, direccion, intensidad) {
+    if (!caja) return;
+    const bloque = caja.parentElement;
+    if (!bloque) return;
+    const aguda = bloque.querySelector('.flecha-aguda');
+    const grave = bloque.querySelector('.flecha-grave');
+    if (aguda) aguda.className = "flecha-afinacion flecha-aguda" + (direccion === 'aguda' ? ` visible ${intensidad}` : "");
+    if (grave) grave.className = "flecha-afinacion flecha-grave" + (direccion === 'grave' ? ` visible ${intensidad}` : "");
+}
+
+function limpiarDireccionesAfinacion() {
+    document.querySelectorAll('.flecha-afinacion.visible').forEach(el => {
+        el.classList.remove('visible', 'leve', 'fuerte');
+    });
 }
 function bucleDeAudio() {
     requestAnimationFrame(bucleDeAudio);
@@ -556,7 +694,9 @@ function bucleDeAudio() {
     const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
 
     if (frecuencia === -1) {
-        ultimaNotaValidadaTexto = ""; 
+        ultimaNotaValidadaTexto = "";
+        const cajaSilencio = document.getElementById(`caja-nota-${notaSecuenciaIndex}`);
+        marcarDireccionAfinacion(cajaSilencio, null);
         return;
     }
 
@@ -603,12 +743,14 @@ function bucleDeAudio() {
             // AFINACIÓN CORRECTA (ZONA DE ESCUCHA ACTIVA)
             muestrasConsecutivasBien++;
             if (cajaActiva) {
-                cajaActiva.className = "nota-caja activa"; 
+                cajaActiva.className = "nota-caja activa";
+                marcarDireccionAfinacion(cajaActiva, null);
             }
 
             if (muestrasConsecutivasBien >= MUESTRAS_NECESARIAS) {
                 if (cajaActiva) {
-                    cajaActiva.className = "nota-caja completada"; 
+                    cajaActiva.className = "nota-caja completada";
+                    marcarDireccionAfinacion(cajaActiva, null);
                 }
                 
                 ultimaNotaValidadaTexto = notaUsuarioTexto;
@@ -617,7 +759,12 @@ function bucleDeAudio() {
                 
                 if (notaSecuenciaIndex >= datosFraseActual.notes.length) {
                     document.getElementById('evaluacion').innerHTML = "<span class='success'>¡Palabra correcta! ✨</span>";
+                    registrarTiempoPalabra(fraseActualIndex);
                     fraseActualIndex++;
+                    if (repasoActivo) {              // se estaba repasando: se vuelve al resumen final
+                        repasoActivo = false;
+                        fraseActualIndex = FRASES_JUEGO.length;
+                    }
                     ultimaNotaValidadaTexto = ""; 
                     esperandoSiguientePalabra = true; // ignora el micro hasta cargar la siguiente palabra
                     temporizadorSiguientePalabra = setTimeout(() => {
@@ -639,11 +786,13 @@ function bucleDeAudio() {
         
             if (cajaActiva) {
                 // --- AJUSTE DEFINITIVO: AMARILLO FIJO A TOLERANCIA + 15 CENTS ---
-                if (absDesviacion <= (toleranciaCentsConfigurada + 15)) {
+                const intensidad = absDesviacion <= (toleranciaCentsConfigurada + 15) ? "leve" : "fuerte";
+                if (intensidad === "leve") {
                     cajaActiva.className = "nota-caja umbral-amarillo"; // Rango intermedio visible
                 } else {
                     cajaActiva.className = "nota-caja umbral-rojo";     // Fuera del amarillo (Alerta roja)
                 }
+                marcarDireccionAfinacion(cajaActiva, desviacionCents > 0 ? "aguda" : "grave", intensidad);
             }
             document.getElementById('evaluacion').innerText = ""; 
         }
@@ -1001,6 +1150,7 @@ async function pasarAEntrenamiento() {
     if (!modoEscucha) return;
     const indice = fraseActualIndex;        // 0 si la escucha había terminado
     cancelarTemporizadores();               // detiene todo y desactiva el modo escucha
+    tiemposPalabras = {};                   // el feedback del entrenamiento empieza de cero
     document.getElementById('controles-escucha').style.display = 'none';
     document.getElementById('evaluacion').innerText = "";
 
