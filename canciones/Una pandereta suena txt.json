@@ -1,0 +1,79 @@
+{
+  "titulo": "Una pandereta suena",
+  "lineas": [
+    {
+      "linea_completa": "Tran-tran,",
+      "texto_visible": "Tran_tran",
+      "silabas": [
+        "Tran",
+        "tran"
+      ]
+    },
+    {
+      "linea_completa": "U-na pan-de-re-ta sue-e-na,",
+      "texto_visible": "Una pandereta suena",
+      "silabas": [
+        "U",
+        "na",
+        "pan",
+        "de",
+        "re",
+        "ta",
+        "sue",
+        "e",
+        "na"
+      ]
+    },
+    {
+      "linea_completa": "yo-no-sé por-don-dei-rá",
+      "texto_visible": "yo_no_sé por_donde_irá",
+      "silabas": [
+        "yo",
+        "no",
+        "sé",
+        "por",
+        "don",
+        "dei",
+        "rá"
+      ]
+    },
+    {
+      "linea_completa": "Sal-mi-ran-di-lloa ran-dan-di-lloa",
+      "texto_visible": "Sal_mirandillo arandandillo",
+      "silabas": [
+        "Sal",
+        "mi",
+        "ran",
+        "di",
+        "lloa",
+        "ran",
+        "dan",
+        "di",
+        "lloa"
+      ]
+    },
+    {
+      "linea_completa": "ran-dan-dá,",
+      "texto_visible": "arandandá",
+      "silabas": [
+        "ran",
+        "dan",
+        "dá"
+      ]
+    },
+    {
+      "linea_completa": "Ca-bo-de guar-diaa-ler-taes-tá",
+      "texto_visible": "Cabo_de guardia_alerta_está",
+      "silabas": [
+        "Ca",
+        "bo",
+        "de",
+        "guar",
+        "diaa",
+        "ler",
+        "taes",
+        "tá"
+      ]
+    }
+  ]
+}
