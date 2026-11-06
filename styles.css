@@ -214,6 +214,35 @@
     padding: 10px 22px;
     font-size: 16px;
 }
+.enhorabuena-hoy {
+    margin: 0 0 14px;
+    text-align: center;
+    font-size: 16px;
+    line-height: 1.4;
+    color: #eee;
+}
+.lista-canciones-hoy {
+    margin: 0 0 16px;
+    padding-left: 1.2em;
+    text-align: left;
+}
+.lista-canciones-hoy li {
+    margin-bottom: 8px;
+    font-size: 15px;
+    line-height: 1.4;
+}
+#zona-reinicio {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+.btn-hoy {
+    background: #2a2a30;
+    color: #ffd740;
+    border: 2px solid #ffd740;
+    margin-top: 8px;
+}
+.btn-hoy:hover { background: rgba(255, 215, 64, 0.15); }
 
 /* ===== Botones de inicio y modo escucha solo ===== */
 .botones-inicio {

@@ -58,12 +58,68 @@ function cerrarAyuda() {
     document.getElementById('ayuda').close();
 }
 
+function etiquetaDificultad(valor) {
+    const nivel = String(valor);
+    if (nivel == "15") return "Profesional 🎯";
+    if (nivel == "30") return "Coral 🎙️";
+    if (nivel == "45") return "Fácil ☕";
+    return "Iniciación / Muy Fácil 👶";
+}
+
 function actualizarTextoDificultad(valor) {
-    const txt = document.getElementById('txt-dificultad');
-    if(valor == "15") txt.innerHTML = "Profesional 🎯";
-    if(valor == "30") txt.innerHTML = "Coral 🎙️";
-    if(valor == "45") txt.innerHTML = "Fácil ☕";
-    if(valor == "60") txt.innerHTML = "Iniciación / Muy Fácil 👶";
+    document.getElementById('txt-dificultad').innerHTML = etiquetaDificultad(valor);
+}
+
+let tituloCancionActual = "";
+let exigenciaUsada = "";
+const CLAVE_ESTUDIO_HOY = "karaoke-estudio-hoy";
+
+function fechaHoy() {
+    const hoy = new Date();
+    const mes = String(hoy.getMonth() + 1).padStart(2, "0");
+    const dia = String(hoy.getDate()).padStart(2, "0");
+    return `${hoy.getFullYear()}-${mes}-${dia}`;
+}
+
+function leerCancionesHoy() {
+    try {
+        const datos = JSON.parse(localStorage.getItem(CLAVE_ESTUDIO_HOY) || "null");
+        if (!datos || datos.fecha !== fechaHoy() || !Array.isArray(datos.piezas)) return [];
+        return datos.piezas;
+    } catch (e) {
+        return [];
+    }
+}
+
+function anotarCancionEstudiadaHoy() {
+    const piezas = leerCancionesHoy();
+    piezas.push({
+        titulo: tituloCancionActual || cancionActual,
+        exigencia: exigenciaUsada || etiquetaDificultad(toleranciaCentsConfigurada)
+    });
+    try {
+        localStorage.setItem(CLAVE_ESTUDIO_HOY, JSON.stringify({ fecha: fechaHoy(), piezas }));
+    } catch (e) { /* si el navegador no guarda, la lista de esta sesión no sobrevive al recargar */ }
+}
+
+function abrirCancionesHoy() {
+    const piezas = leerCancionesHoy();
+    const lista = document.getElementById('lista-canciones-hoy');
+    lista.innerHTML = "";
+    piezas.forEach(pieza => {
+        const item = document.createElement('li');
+        item.textContent = `${pieza.titulo} — ${pieza.exigencia}`;
+        lista.appendChild(item);
+    });
+    const enhorabuena = document.getElementById('enhorabuena-hoy');
+    enhorabuena.textContent = piezas.length === 1
+        ? "Enhorabuena por el trabajo realizado hoy. Has estudiado una pieza."
+        : `Enhorabuena por el trabajo realizado hoy. Has estudiado ${piezas.length} piezas.`;
+    document.getElementById('canciones-hoy').showModal();
+}
+
+function cerrarCancionesHoy() {
+    document.getElementById('canciones-hoy').close();
 }
 
 let audioContext;
@@ -163,6 +219,7 @@ async function iniciarApp(modo = 'entrenamiento') {
         ultimaNotaValidadaTexto = "";
 
         toleranciaCentsConfigurada = parseInt(document.getElementById('selector-dificultad').value) || DIFICULTAD_INICIAL;
+        exigenciaUsada = etiquetaDificultad(toleranciaCentsConfigurada);
 
         const cancionSeleccionada = document.getElementById('selector-cancion').value.trim();
         cancionActual = cancionSeleccionada;
@@ -190,6 +247,7 @@ async function iniciarApp(modo = 'entrenamiento') {
 
         // Mostrar el nombre de la canción junto al del coro
         const tituloCancion = datosTexto.titulo || cancionSeleccionada;
+        tituloCancionActual = tituloCancion;
         const elTitulo = document.getElementById('titulo-cancion');
         elTitulo.textContent = `· 🎼 ${tituloCancion}`;
         elTitulo.style.display = 'inline';
@@ -421,7 +479,7 @@ function cargarNuevaFrasePalabra(sinGuia = false) {
         document.getElementById('palabra-pantalla').innerText = "🎉 ¡COMPLETADO!";
         document.getElementById('secuencia-visual').innerHTML = "";
         document.getElementById('evaluacion').innerHTML = "<span class='success'>Pieza terminada. Buen trabajo.</span>";
-        document.getElementById('zona-reinicio').style.display = "block";
+        document.getElementById('zona-reinicio').style.display = "flex";
         mostrarResumenFinal();
         return;
     }
@@ -790,9 +848,11 @@ function bucleDeAudio() {
                     document.getElementById('evaluacion').innerHTML = "<span class='success'>¡Palabra correcta! ✨</span>";
                     registrarTiempoPalabra(fraseActualIndex);
                     fraseActualIndex++;
-                    if (repasoActivo) {              // se estaba repasando: se vuelve al resumen final
+                    if (repasoActivo) {              // se estaba repasando: se vuelve al resumen final, sin apuntar otra vez la pieza
                         repasoActivo = false;
                         fraseActualIndex = FRASES_JUEGO.length;
+                    } else if (fraseActualIndex >= FRASES_JUEGO.length) {
+                        anotarCancionEstudiadaHoy();
                     }
                     ultimaNotaValidadaTexto = ""; 
                     esperandoSiguientePalabra = true; // ignora el micro hasta cargar la siguiente palabra
