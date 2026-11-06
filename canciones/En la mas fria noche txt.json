@@ -1,0 +1,95 @@
+{
+  "titulo": "En la mas fria noche",
+  "lineas": [
+    {
+      "linea_completa": "En la más frí-a no-che",
+      "silabas": [
+        "En",
+        "la",
+        "más",
+        "frí",
+        "a",
+        "no",
+        "che"
+      ]
+    },
+    {
+      "linea_completa": "De la Na-vi-dad,",
+      "silabas": [
+        "De",
+        "la",
+        "Na",
+        "vi",
+        "dad"
+      ]
+    },
+    {
+      "linea_completa": "En-ci-maun-as pa-jas",
+      "texto_visible": "Encima_unas pajas",
+      "silabas": [
+        "En",
+        "ci",
+        "maun",
+        "as",
+        "pa",
+        "jas"
+      ]
+    },
+    {
+      "linea_completa": "Je-sús duer-me ya,",
+      "silabas": [
+        "Je",
+        "sús",
+        "duer",
+        "me",
+        "ya"
+      ]
+    },
+    {
+      "linea_completa": "Y to-das las es-tre-llas",
+      "silabas": [
+        "Y",
+        "to",
+        "das",
+        "las",
+        "es",
+        "tre",
+        "llas"
+      ]
+    },
+    {
+      "linea_completa": "Queen-el cie-loes-tá-an",
+      "texto_visible": "Que_en_el cielo_están",
+      "silabas": [
+        "Queen",
+        "el",
+        "cie",
+        "loes",
+        "tá",
+        "an"
+      ]
+    },
+    {
+      "linea_completa": "Con-tem-plan con go-zo",
+      "silabas": [
+        "Con",
+        "tem",
+        "plan",
+        "con",
+        "go",
+        "zo"
+      ]
+    },
+    {
+      "linea_completa": "Su-ros-tro ga-lán.",
+      "texto_visible": "Su_rostro galán",
+	"silabas": [
+        "Su",
+        "ros",
+        "tro",
+        "ga",
+        "lán"
+      ]
+    }
+  ]
+}

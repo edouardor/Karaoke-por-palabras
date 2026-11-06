@@ -47,10 +47,10 @@ const NOMBRES_NOTA_ESPANOL = ["Do","Do#","Re","Re#","Mi","Fa","Fa#","Sol","Sol#"
 
 function actualizarTextoDificultad(valor) {
     const txt = document.getElementById('txt-dificultad');
-    if(valor == "15") txt.innerHTML = "Profesional (±15 cents) 🎯";
-    if(valor == "30") txt.innerHTML = "Coral (±30 cents) 🎙️";
-    if(valor == "45") txt.innerHTML = "Fácil (±45 cents) ☕";
-    if(valor == "60") txt.innerHTML = "Iniciación / Muy Fácil (±60 cents) 👶";
+    if(valor == "15") txt.innerHTML = "Profesional 🎯";
+    if(valor == "30") txt.innerHTML = "Coral 🎙️";
+    if(valor == "45") txt.innerHTML = "Fácil ☕";
+    if(valor == "60") txt.innerHTML = "Iniciación / Muy Fácil 👶";
 }
 
 let audioContext;
