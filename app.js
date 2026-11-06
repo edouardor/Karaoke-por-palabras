@@ -39,9 +39,7 @@ let bucleAudioActivo = false;            // evita arrancar varios bucles de audi
 // ---- Ajustes específicos por canción ----
 // Canciones en las que el usuario canta primero la nota inicial y la melodía se transpone a ella
 const CANCIONES_AFINACION_LIBRE = ["Cumpleanos Feliz"];
-// Dificultad (cents) que se propone al elegir cada canción
-const DIFICULTAD_POR_CANCION = { "Cumpleanos Feliz": 60 };   // 60 = Muy Fácil
-let dificultadPreviaUsuario = null;
+const DIFICULTAD_INICIAL = 60;   // Iniciación / Muy Fácil, para cualquier canción
 
 let modoCalibracion = false;             // true mientras se espera la primera nota
 let muestrasCalibracion = [];
@@ -54,10 +52,10 @@ const NOMBRES_NOTA_ESPANOL = ["Do","Do#","Re","Re#","Mi","Fa","Fa#","Sol","Sol#"
 
 function actualizarTextoDificultad(valor) {
     const txt = document.getElementById('txt-dificultad');
-    if(valor == "15") txt.innerHTML = "Profesional (±15 cents) 🎯";
-    if(valor == "30") txt.innerHTML = "Coral (±30 cents) 🎙️";
-    if(valor == "45") txt.innerHTML = "Fácil (±45 cents) ☕";
-    if(valor == "60") txt.innerHTML = "Iniciación / Muy Fácil (±60 cents) 👶";
+    if(valor == "15") txt.innerHTML = "Profesional 🎯";
+    if(valor == "30") txt.innerHTML = "Coral 🎙️";
+    if(valor == "45") txt.innerHTML = "Fácil ☕";
+    if(valor == "60") txt.innerHTML = "Iniciación / Muy Fácil 👶";
 }
 
 let audioContext;
@@ -156,7 +154,7 @@ async function iniciarApp(modo = 'entrenamiento') {
         muestrasConsecutivasBien = 0;
         ultimaNotaValidadaTexto = "";
 
-        toleranciaCentsConfigurada = parseInt(document.getElementById('selector-dificultad').value) || 45;
+        toleranciaCentsConfigurada = parseInt(document.getElementById('selector-dificultad').value) || DIFICULTAD_INICIAL;
 
         const cancionSeleccionada = document.getElementById('selector-cancion').value.trim();
         cancionActual = cancionSeleccionada;
@@ -894,15 +892,7 @@ function transponerCancionAPrimeraNota(midiPrimeraNota) {
 // ==========================================
 function alCambiarCancion() {
     const slider = document.getElementById('selector-dificultad');
-    const cancion = document.getElementById('selector-cancion').value.trim();
-
-    if (cancion in DIFICULTAD_POR_CANCION) {
-        if (dificultadPreviaUsuario === null) dificultadPreviaUsuario = slider.value;
-        slider.value = DIFICULTAD_POR_CANCION[cancion];
-    } else if (dificultadPreviaUsuario !== null) {
-        slider.value = dificultadPreviaUsuario;   // recupera la dificultad que tenía el usuario
-        dificultadPreviaUsuario = null;
-    }
+    slider.value = DIFICULTAD_INICIAL;
     actualizarTextoDificultad(slider.value);
 }
 document.addEventListener('DOMContentLoaded', alCambiarCancion);
