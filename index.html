@@ -12,6 +12,22 @@
 <div class="container">
     <h2>🎵 Karaoke Adaptativo por Palabras</h2>
     <p><strong>Coro Canticorum Bajos</strong><span id="titulo-cancion" class="titulo-cancion" style="display:none"></span></p>
+
+    <button type="button" id="btn-ayuda" class="btn-ayuda" onclick="abrirAyuda()">❓ Ayuda</button>
+
+    <dialog id="ayuda" class="ayuda" onclick="if (event.target === this) cerrarAyuda()">
+        <h3>Cómo funciona</h3>
+        <ol>
+            <li>Elige una pieza. Todas empiezan en <strong>Iniciación / Muy Fácil</strong>. Si más adelante te resulta cómodo, puedes pedir más precisión con la barra.</li>
+            <li><strong>Modo escucha:</strong> oyes la melodía de los bajos, palabra a palabra, sin cantar. Puedes pausar, ir adelante o atrás, y pasar a entrenar desde la palabra en la que estés.</li>
+            <li><strong>Modo entrenamiento:</strong> primero suena la guía de la palabra. Luego cantas con el micrófono. Cada celda es una nota: se pone verde cuando la afinación vale y se pasa a la siguiente.</li>
+            <li>Si vas <strong>agudo</strong>, aparece un triángulo hacia abajo encima de la celda. Si vas <strong>grave</strong>, uno hacia arriba debajo. Cuando entras en la zona aceptada, el triángulo desaparece.</li>
+            <li>Pulsa una celda para oír esa nota y repetir la palabra desde ahí. Las flechas (o las teclas ← y →) cambian de palabra.</li>
+            <li>En <strong>Cumpleaños Feliz</strong> cantas primero una nota cómoda y la melodía se coloca en esa tesitura.</li>
+        </ol>
+        <p class="ayuda-aviso">No te desanimes si no sale a la primera: es normal, y se puede repetir con calma las veces que haga falta. No fuerces la voz. Si notas tensión o cansancio, para, respira y vuelve a escuchar la melodía antes de cantar otra vez.</p>
+        <button type="button" class="btn-ayuda-cerrar" onclick="cerrarAyuda()">Entendido</button>
+    </dialog>
     
     <div id="zona-seleccion">
         <label for="selector-cancion" style="display:block; margin-bottom:10px; color:#aaa;">Elige una pieza para ensayar:</label>

@@ -50,6 +50,14 @@ const MIDI_MAX_PRIMERA_NOTA = 64;        // Mi4 (la melodía sube hasta una octa
 const NOMBRES_NOTA_INGLES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 const NOMBRES_NOTA_ESPANOL = ["Do","Do#","Re","Re#","Mi","Fa","Fa#","Sol","Sol#","La","La#","Si"];
 
+function abrirAyuda() {
+    document.getElementById('ayuda').showModal();
+}
+
+function cerrarAyuda() {
+    document.getElementById('ayuda').close();
+}
+
 function actualizarTextoDificultad(valor) {
     const txt = document.getElementById('txt-dificultad');
     if(valor == "15") txt.innerHTML = "Profesional 🎯";
