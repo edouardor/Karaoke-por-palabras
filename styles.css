@@ -72,7 +72,8 @@
         .nota-caja.activa { border-color: #00b0ff; color: #00b0ff; background: rgba(0,176,255,0.1); }
         .nota-caja.completada { border-color: #00e676; color: #00e676; background: rgba(0,230,118,0.2); }
         .nota-caja.umbral-amarillo { border-color: #ffd740; color: #ffd740; background: rgba(255,215,64,0.15); box-shadow: 0 0 8px rgba(255,215,64,0.2); } 
-        .nota-caja.umbral-rojo { border-color: #ff5252; color: #ff5252; background: rgba(255,82,82,0.15); box-shadow: 0 0 8px rgba(255,82,82,0.2); } 
+        .nota-caja.umbral-rojo { border-color: #ff5252; color: #ff5252; background: rgba(255,82,82,0.15); box-shadow: 0 0 8px rgba(255,82,82,0.2); }
+        .nota-caja.atascada { border-color: #ffffff; box-shadow: 0 0 8px rgba(255,255,255,0.45); } 
         
         .control-dificultad { margin: 20px 0 30px 0; background: #222226; padding: 15px; border-radius: 12px; border: 1px solid #333; }
         .control-dificultad input[type=range] { width: 100%; margin-top: 10px; accent-color: #00b0ff; cursor: pointer; }
