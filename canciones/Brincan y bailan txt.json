@@ -2,7 +2,8 @@
   "titulo": "Brincan  y bailan",
   "lineas": [
     {
-      "linea_completa": "En Be-lén to-can a fue-go-o-o,",
+      "linea_completa": "En-Be-lén to-can a fue-go-o-o,",
+      "texto_visible": "En_Be-lén to-can a fue-go,",
       "silabas": [
         "En",
         "Be",
@@ -17,7 +18,8 @@
       ]
     },
     {
-      "linea_completa": "Del por-tal sa-len las lla-ma-a-as,",
+      "linea_completa": "Del-por-tal sa-len las lla-ma-a-as,",
+      "texto_visible": "Del_por-tal sa-len las lla-mas,",
       "silabas": [
         "Del",
         "por",
@@ -32,7 +34,8 @@
       ]
     },
     {
-      "linea_completa": "Por-que di-cen que-e ha na-ci-do-o-o,",
+      "linea_completa": "Por-que di-cen que-e-ha na-ci-do-o-o,",
+      "texto_visible": "Por-que di-cen que_ha na-ci-do",
       "silabas": [
         "Por",
         "que",
@@ -49,7 +52,8 @@
       ]
     },
     {
-      "linea_completa": "El re-den-tor de las al-mas.",
+      "linea_completa": "El-re-den-tor de las al-mas.",
+      "texto_visible": "El_re-den-tor de las al-mas.",
       "silabas": [
         "El",
         "re",
@@ -62,7 +66,8 @@
       ]
     },
     {
-      "linea_completa": "Brin-can y brin-can y bai-lan,",
+      "linea_completa": "Brin-can-y brin-can y bai-lan,",
+      "texto_visible": "Brin-can_y brin-can y bai-lan,",
       "silabas": [
         "Brin",
         "can",
@@ -75,7 +80,8 @@
       ]
     },
     {
-      "linea_completa": "Los pe-ces en el rí-o,",
+      "linea_completa": "Los-pe-ces en-el rí-o,",
+      "texto_visible": "Los_pe-ces en_el rí-o,",
       "silabas": [
         "Los",
         "pe",
@@ -87,7 +93,8 @@
       ]
     },
     {
-      "linea_completa": "Brin-can y bai-lan de ver a Dios na-ci-do,",
+      "linea_completa": "Brin-can-y bai-lan de-ver a-Dios na-ci-do,",
+      "texto_visible": "Brin-can_y bai-lan de_ver a_Dios na-ci-do",
       "silabas": [
         "Brin",
         "can",
@@ -126,8 +133,8 @@
       ]
     },
     {
-      "linea_completa": "Brin-can y bai-lan de ver na-ci-doel al-ba.",
-      "texto_visible": "Brincan y bailan de ver nacido_el alba",
+      "linea_completa": "Brin-can y bai-lan de-ver na-ci-doel al-ba.",
+      "texto_visible": "Brincan y bailan de_ver nacido_el alba",
       "silabas": [
         "Brin",
         "can",
