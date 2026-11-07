@@ -106,15 +106,28 @@ function leerCancionesHoy() {
     }
 }
 
-function anotarCancionEstudiadaHoy() {
+function anotarCancionEstudiadaHoy(puntuacionKaraoke) {
     const piezas = leerCancionesHoy();
-    piezas.push({
+    const pieza = {
         titulo: tituloCancionActual || cancionActual,
         exigencia: exigenciaUsada || etiquetaDificultad(toleranciaCentsConfigurada)
-    });
+    };
+    if (puntuacionKaraoke) pieza.karaoke = puntuacionKaraoke;
+    piezas.push(pieza);
     try {
         localStorage.setItem(CLAVE_ESTUDIO_HOY, JSON.stringify({ fecha: fechaHoy(), piezas }));
     } catch (e) { /* si el navegador no guarda, la lista de esta sesión no sobrevive al recargar */ }
+}
+
+function textoPiezaEstudiada(pieza) {
+    let texto = `${pieza.titulo} — ${pieza.exigencia}`;
+    if (pieza.karaoke && typeof pieza.karaoke.promedio === "number") {
+        texto += ` — Karaoke ${pieza.karaoke.promedio}%`;
+        if (typeof pieza.karaoke.aciertos === "number" && typeof pieza.karaoke.total === "number") {
+            texto += ` (${pieza.karaoke.aciertos} de ${pieza.karaoke.total})`;
+        }
+    }
+    return texto;
 }
 
 function abrirCancionesHoy() {
@@ -123,7 +136,7 @@ function abrirCancionesHoy() {
     lista.innerHTML = "";
     piezas.forEach(pieza => {
         const item = document.createElement('li');
-        item.textContent = `${pieza.titulo} — ${pieza.exigencia}`;
+        item.textContent = textoPiezaEstudiada(pieza);
         lista.appendChild(item);
     });
     const enhorabuena = document.getElementById('enhorabuena-hoy');
@@ -1604,10 +1617,9 @@ function terminarKaraoke() {
     notaEnJuicio = null;
     estadoKaraoke = 'fin';
 
-    anotarCancionEstudiadaHoy();
-
     const total = notasLineaKaraoke.length;
     const promedio = total ? Math.round((aciertosKaraoke * 100) / total) : 0;
+    anotarCancionEstudiadaHoy({ aciertos: aciertosKaraoke, total, promedio });
     document.getElementById('palabra-pantalla').innerText = "🎉 Karaoke";
     document.getElementById('secuencia-visual').innerHTML = "";
 
