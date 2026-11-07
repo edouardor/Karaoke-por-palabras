@@ -20,6 +20,7 @@
         <ol>
             <li>Elige una pieza. Todas empiezan en <strong>Iniciación / Muy Fácil</strong>. Si más adelante te resulta cómodo, puedes pedir más precisión con la barra.</li>
             <li><strong>Modo escucha:</strong> oyes la melodía de los bajos, palabra a palabra, sin cantar. Puedes pausar, ir adelante o atrás, y pasar a entrenar desde la palabra en la que estés.</li>
+            <li><strong>Modo karaoke:</strong> la melodía suena seguida desde el principio, sin esperar a que cantes. Tú vas detrás con el micrófono. Cada nota se pone verde si la afinas a tiempo y, al terminar, ves el promedio y un comentario. Con auriculares el micrófono oye tu voz y no la melodía.</li>
             <li><strong>Modo entrenamiento:</strong> primero suena la guía de la palabra. Luego cantas con el micrófono. Cada celda es una nota: se pone verde cuando la afinación vale y se pasa a la siguiente.</li>
             <li>Si vas <strong>agudo</strong>, aparece un triángulo hacia abajo encima de la celda. Si vas <strong>grave</strong>, uno hacia arriba debajo. Cuando entras en la zona aceptada, el triángulo desaparece.</li>
             <li>Si llevas más de 3 segundos intentando una nota, el borde se pone <strong>blanco</strong>. Púlsala: oirás la nota que estás cantando y, después, la que toca.</li>
@@ -69,6 +70,7 @@
 
     <div id="botones-inicio" class="botones-inicio">
         <button id="btn-comenzar" onclick="iniciarApp('entrenamiento')">🎤 Modo entrenamiento</button>
+        <button id="btn-karaoke" class="btn-karaoke" onclick="iniciarApp('karaoke')">🎶 Modo karaoke</button>
         <button id="btn-escucha" class="btn-escucha" onclick="iniciarApp('escucha')">🎧 Modo escucha solo</button>
     </div>
     
@@ -85,6 +87,12 @@
         <div id="secuencia-visual" class="secuencia-cajas"></div>
 
         <div id="evaluacion" style="margin-top: 15px; font-weight: bold; font-size: 18px; min-height: 25px;"></div>
+
+        <div id="controles-karaoke" class="controles-escucha" style="display: none;">
+            <button id="btn-pausa-karaoke" class="btn-pausa" onclick="pausarKaraoke()" aria-label="Pausa" title="Pausa">❚❚ Pausa</button>
+            <button id="btn-seguir-karaoke" class="btn-karaoke" onclick="seguirKaraoke()" style="display: none;">▶ Seguir cantando</button>
+            <button id="btn-repetir-karaoke" class="btn-karaoke" onclick="iniciarKaraokeDesde(0)" style="display: none;">↺ Cantar otra vez</button>
+        </div>
 
         <div id="controles-escucha" class="controles-escucha" style="display: none;">
             <button id="btn-pausa-escucha" class="btn-pausa" onclick="pausarEscucha()" aria-label="Pausa" title="Pausa">❚❚ Pausa</button>

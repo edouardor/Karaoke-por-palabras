@@ -32,6 +32,16 @@ const GUIA_DURACION_MINIMA_ULTIMA = 0.35; // y la última nota de cada palabra s
 const UMBRAL_SILENCIO_ESCUCHA = 3;       // segundos: a partir de aquí se avisa "Aquí no cantamos"
 let modoEscucha = false;                 // true mientras se está en el modo escucha
 let estadoEscucha = 'reproduciendo';     // 'reproduciendo' | 'pausada' | 'fin'
+// ---- Modo karaoke: la melodía sigue sola y se puntúan las notas al vuelo ----
+let modoKaraoke = false;
+let estadoKaraoke = 'reproduciendo';     // 'reproduciendo' | 'pausada' | 'fin'
+let modoSolicitado = 'entrenamiento';    // modo con el que se arrancó esta pieza
+let notasLineaKaraoke = [];              // todas las notas, en orden, con su palabra
+let indiceNotaKaraoke = 0;
+let notaEnJuicio = null;                 // nota que se está puntuando ahora mismo
+let aciertosKaraoke = 0;
+let temporizadorKaraoke = null;
+let relojKaraoke = { t0: 0, tiempoBase: 0 };
 let temporizadorEscucha = null;          // temporizador de la siguiente nota
 let relojEscucha = { t0: 0, tiempoBase: 0 }; // referencia para no acumular retraso
 let sonidoEscuchaActual = null;          // última nota sonando (para silenciarla al pausar)
@@ -225,6 +235,7 @@ async function iniciarApp(modo = 'entrenamiento') {
 
         toleranciaCentsConfigurada = parseInt(document.getElementById('selector-dificultad').value) || DIFICULTAD_INICIAL;
         exigenciaUsada = etiquetaDificultad(toleranciaCentsConfigurada);
+        modoSolicitado = modo;
 
         const cancionSeleccionada = document.getElementById('selector-cancion').value.trim();
         cancionActual = cancionSeleccionada;
@@ -352,11 +363,13 @@ async function iniciarApp(modo = 'entrenamiento') {
             return;
         }
 
-        // ----- MODO ENTRENAMIENTO -----
+        // ----- MODO ENTRENAMIENTO o KARAOKE (los dos escuchan el micrófono) -----
         await asegurarMicrofono();
 
         if (CANCIONES_AFINACION_LIBRE.includes(cancionSeleccionada)) {
             iniciarCalibracion();
+        } else if (modo === 'karaoke') {
+            iniciarKaraokeDesde(0);
         } else {
             cargarNuevaFrasePalabra();
         }
@@ -543,8 +556,8 @@ function cargarNuevaFrasePalabra(sinGuia = false) {
         flechaGrave.setAttribute("aria-hidden", "true");
         cajaNota.style.cursor = "pointer";
         
-        cajaNota.onclick = () => {
-            if (reproduciendoGuia || modoEscucha) return;
+            cajaNota.onclick = () => {
+            if (reproduciendoGuia || modoEscucha || modoKaraoke) return;
             if (cajaNota.classList.contains('atascada') && idx === notaSecuenciaIndex) {
                 explicarNotaAtascada(notaIngles);
                 return;
@@ -605,16 +618,27 @@ function cancelarTemporizadores() {
     esperandoSiguientePalabra = false;
     clearTimeout(temporizadorEscucha);
     temporizadorEscucha = null;
+    clearTimeout(temporizadorKaraoke);
+    temporizadorKaraoke = null;
     limpiarSilencioEscucha();
     silenciarSonidoEscucha();
     modoEscucha = false;
+    modoKaraoke = false;
+    notaEnJuicio = null;
     repasoActivo = false;
+    actualizarControlesKaraoke();
 }
 
 function actualizarFlechas() {
     const btnAnt = document.getElementById('btn-anterior');
     const btnSig = document.getElementById('btn-siguiente');
     if (!btnAnt || !btnSig) return;
+    // En karaoke la canción va sola de principio a fin: las flechas cambiarían la cuenta.
+    if (modoKaraoke) {
+        btnAnt.style.visibility = 'hidden';
+        btnSig.style.visibility = 'hidden';
+        return;
+    }
     // visibility (y no display) para que la palabra no se desplace al ocultarlas
     btnAnt.style.visibility = (palabraMostradaIndex > 0 && FRASES_JUEGO.length > 0) ? 'visible' : 'hidden';
     btnSig.style.visibility = (palabraMostradaIndex < FRASES_JUEGO.length - 1) ? 'visible' : 'hidden';
@@ -837,6 +861,7 @@ function explicarNotaAtascada(notaObjetivoIngles) {
 function bucleDeAudio() {
     requestAnimationFrame(bucleDeAudio);
     if (modoCalibracion) { procesarCalibracion(); return; }
+    if (modoKaraoke) { procesarKaraoke(); return; }
     if (reproduciendoGuia || esperandoSiguientePalabra || modoEscucha) return;
 
     if (fraseActualIndex >= FRASES_JUEGO.length) return; 
@@ -1038,7 +1063,8 @@ function procesarCalibracion() {
 
     temporizadorSiguientePalabra = setTimeout(() => {
         mensaje.innerText = "";
-        cargarNuevaFrasePalabra();
+        if (modoSolicitado === 'karaoke') iniciarKaraokeDesde(0);
+        else cargarNuevaFrasePalabra();
     }, 1200);
 }
 
@@ -1335,10 +1361,326 @@ async function pasarAEntrenamiento() {
     }
 }
 
+// ==========================================
+// MODO KARAOKE
+// ==========================================
+// La melodía suena seguida, con el ritmo del MIDI, sin esperar a que se cante.
+// Cada nota cuenta como acierto si, mientras suena, la voz entra en la tolerancia.
+
+function construirLineaKaraoke() {
+    notasLineaKaraoke = [];
+    FRASES_JUEGO.forEach((palabra, indicePalabra) => {
+        palabra.notesIngles.forEach((ingles, indiceNota) => {
+            notasLineaKaraoke.push({
+                palabraIndex: indicePalabra,
+                notaIndex: indiceNota,
+                tiempo: palabra.tiempos[indiceNota],
+                duracion: palabra.duraciones[indiceNota] || 0.4,
+                ingles: ingles,
+                nombre: palabra.notes[indiceNota],
+                acertada: false,
+                juzgada: false
+            });
+        });
+    });
+}
+
+// Misma cuenta de cents que el entrenamiento, para que la tolerancia se sienta igual.
+function centsRespectoANota(frecuencia, notaEspanol, notaIngles) {
+    const valorMidiUsuario = 69 + 12 * Math.log2(frecuencia / 440);
+    const idUsuario = ((Math.round(valorMidiUsuario) % 12) + 12) % 12;
+    const idObjetivo = MAPA_NOTAS_A_NUMERO[notaEspanol.toLowerCase()];
+    const distancia = Math.min(Math.abs(idUsuario - idObjetivo), 12 - Math.abs(idUsuario - idObjetivo));
+
+    let letra = notaIngles.replace(/[0-9]/g, '').trim().toUpperCase();
+    const octava = parseInt(notaIngles.replace(/[^0-9]/g, '')) || 4;
+    const bemoles = { "DB": "C#", "EB": "D#", "GB": "F#", "AB": "G#", "BB": "A#" };
+    if (bemoles[letra]) letra = bemoles[letra];
+    const hzObjetivo = (FRECUENCIAS_BASE_OCTAVA_0[letra] || 18.35) * Math.pow(2, octava);
+    const midiObjetivo = 69 + 12 * Math.log2(hzObjetivo / 440);
+    let cents = (valorMidiUsuario - midiObjetivo) * 100;
+    if (distancia > 0) cents = cents >= 0 ? 150 : -150;
+    return cents;
+}
+
+function comentarioKaraoke(porcentaje) {
+    if (porcentaje >= 95) return "¡Afinación de disco! Si esto fuera un concierto, habría bis.";
+    if (porcentaje >= 80) return "Qué bien suena. El coro se va a poner contento.";
+    if (porcentaje >= 65) return "Buen karaoke: la melodía ya va contigo.";
+    if (porcentaje >= 45) return "Has cantado la canción entera. Otra pasada y el promedio sube.";
+    if (porcentaje >= 25) return "Unas cuantas notas han dado en el clavo. El resto se deja querer.";
+    return "Hoy ha ganado la escucha. Sin forzar la voz, la próxima sale mejor.";
+}
+
+function actualizarMarcadorKaraoke() {
+    const total = notasLineaKaraoke.length;
+    const van = Math.min(indiceNotaKaraoke + 1, total);
+    document.getElementById('evaluacion').innerText =
+        `🎤 Karaoke · ${aciertosKaraoke} aciertos · nota ${van} de ${total}`;
+}
+
+function actualizarControlesKaraoke() {
+    const caja = document.getElementById('controles-karaoke');
+    if (!caja) return;
+    caja.style.display = modoKaraoke ? 'flex' : 'none';
+    if (!modoKaraoke) return;
+    const sonando = estadoKaraoke === 'reproduciendo';
+    document.getElementById('btn-pausa-karaoke').style.display = sonando ? 'inline-block' : 'none';
+    document.getElementById('btn-seguir-karaoke').style.display = estadoKaraoke === 'pausada' ? 'inline-block' : 'none';
+    document.getElementById('btn-repetir-karaoke').style.display = estadoKaraoke === 'fin' ? 'inline-block' : 'none';
+    if (sonando) actualizarMarcadorKaraoke();
+    if (estadoKaraoke === 'pausada') document.getElementById('evaluacion').innerText = "⏸ Karaoke en pausa";
+}
+
+function programarKaraoke(tiempoObjetivo, accion, idEjecucion) {
+    const transcurridoMs = performance.now() - relojKaraoke.t0;
+    const esperaMs = Math.max(0, (tiempoObjetivo - relojKaraoke.tiempoBase) * 1000 - transcurridoMs);
+    temporizadorKaraoke = setTimeout(() => {
+        if (!modoKaraoke || idEjecucion !== idGuia || estadoKaraoke !== 'reproduciendo') return;
+        accion();
+    }, esperaMs);
+}
+
+function mostrarPalabraKaraoke(indice) {
+    fraseActualIndex = indice;
+    cargarNuevaFrasePalabra(true);
+    notasLineaKaraoke.forEach(nota => {
+        if (nota.palabraIndex !== indice || !nota.juzgada) return;
+        const caja = document.getElementById(`caja-nota-${nota.notaIndex}`);
+        if (caja) caja.className = nota.acertada ? "nota-caja completada" : "nota-caja fallada";
+    });
+}
+
+function destacarNotaKaraoke(nota) {
+    const caja = document.getElementById(`caja-nota-${nota.notaIndex}`);
+    if (!caja || nota.palabraIndex !== palabraMostradaIndex || nota.acertada) return;
+    caja.className = "nota-caja activa";
+    marcarDireccionAfinacion(caja, null);
+}
+
+function pintarAciertoKaraoke(nota) {
+    const caja = document.getElementById(`caja-nota-${nota.notaIndex}`);
+    if (!caja || nota.palabraIndex !== palabraMostradaIndex) return;
+    caja.className = "nota-caja completada";
+    marcarDireccionAfinacion(caja, null);
+}
+
+function juzgarNotaKaraoke(nota) {
+    if (!nota || nota.juzgada) return;
+    nota.juzgada = true;
+    if (notaEnJuicio === nota) notaEnJuicio = null;
+    muestrasConsecutivasBien = 0;
+    const caja = document.getElementById(`caja-nota-${nota.notaIndex}`);
+    if (caja && nota.palabraIndex === palabraMostradaIndex) {
+        caja.className = nota.acertada ? "nota-caja completada" : "nota-caja fallada";
+        marcarDireccionAfinacion(caja, null);
+    }
+}
+
+function mostrarSilencioKaraoke(tiempoSiguiente, siguienteNota) {
+    enSilencio = true;
+    notaEnJuicio = null;
+    const finMs = relojKaraoke.t0 + (tiempoSiguiente - relojKaraoke.tiempoBase) * 1000;
+    const pantalla = document.getElementById('palabra-pantalla');
+    pantalla.className = "palabra-actual silencio";
+    pantalla.innerText = "🤫 Aquí no cantamos";
+    const palabra = FRASES_JUEGO[siguienteNota.palabraIndex].palabra
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const dibujar = () => {
+        const restante = Math.max(1, Math.ceil((finMs - performance.now()) / 1000));
+        document.getElementById('secuencia-visual').innerHTML =
+            `<div style="font-size:18px; color:#aaa;">Seguimos con «${palabra}» en ${restante} s</div>`;
+    };
+    dibujar();
+    intervaloSilencio = setInterval(dibujar, 250);
+}
+
+function emitirNotaKaraoke(idEjecucion) {
+    if (!modoKaraoke || idEjecucion !== idGuia || estadoKaraoke !== 'reproduciendo') return;
+    if (indiceNotaKaraoke >= notasLineaKaraoke.length) {
+        terminarKaraoke();
+        return;
+    }
+
+    const nota = notasLineaKaraoke[indiceNotaKaraoke];
+    if (enSilencio || nota.palabraIndex !== palabraMostradaIndex) {
+        limpiarSilencioEscucha();
+        mostrarPalabraKaraoke(nota.palabraIndex);
+    }
+
+    notaEnJuicio = nota;
+    muestrasConsecutivasBien = 0;
+    ultimaNotaValidadaTexto = "";
+    destacarNotaKaraoke(nota);
+    sonarNota(nota.ingles, nota.duracion);
+    actualizarMarcadorKaraoke();
+
+    const siguiente = notasLineaKaraoke[indiceNotaKaraoke + 1];
+    const finNatural = nota.tiempo + nota.duracion;
+    const finJuicio = siguiente ? Math.min(finNatural, siguiente.tiempo) : finNatural;
+    programarKaraoke(finJuicio, () => cerrarNotaKaraoke(idEjecucion, finJuicio), idEjecucion);
+}
+
+function cerrarNotaKaraoke(idEjecucion, finJuicio) {
+    if (!modoKaraoke || idEjecucion !== idGuia || estadoKaraoke !== 'reproduciendo') return;
+    const nota = notasLineaKaraoke[indiceNotaKaraoke];
+    juzgarNotaKaraoke(nota);
+
+    const siguiente = notasLineaKaraoke[indiceNotaKaraoke + 1];
+    if (!siguiente) {
+        terminarKaraoke();
+        return;
+    }
+
+    indiceNotaKaraoke++;
+    if ((siguiente.tiempo - finJuicio) > UMBRAL_SILENCIO_ESCUCHA) {
+        mostrarSilencioKaraoke(siguiente.tiempo, siguiente);
+    }
+    programarKaraoke(siguiente.tiempo, () => emitirNotaKaraoke(idEjecucion), idEjecucion);
+}
+
+function iniciarKaraokeDesde(indicePalabra) {
+    cancelarTemporizadores();
+    if (!FRASES_JUEGO.length) return;
+
+    construirLineaKaraoke();
+    aciertosKaraoke = 0;
+    indiceNotaKaraoke = 0;
+    if (indicePalabra > 0) {
+        const encontrado = notasLineaKaraoke.findIndex(nota => nota.palabraIndex >= indicePalabra);
+        indiceNotaKaraoke = encontrado < 0 ? 0 : encontrado;
+    }
+
+    modoKaraoke = true;
+    estadoKaraoke = 'reproduciendo';
+    fraseActualIndex = notasLineaKaraoke[indiceNotaKaraoke].palabraIndex;
+    document.getElementById('zona-reinicio').style.display = 'none';
+    document.getElementById('controles-escucha').style.display = 'none';
+
+    const primera = notasLineaKaraoke[indiceNotaKaraoke];
+    relojKaraoke = { t0: performance.now(), tiempoBase: primera.tiempo };
+    palabraMostradaIndex = -1;             // obliga a dibujar la primera palabra
+    idGuia++;
+    actualizarControlesKaraoke();
+    emitirNotaKaraoke(idGuia);
+}
+
+function pausarKaraoke() {
+    if (!modoKaraoke || estadoKaraoke !== 'reproduciendo') return;
+    clearTimeout(temporizadorKaraoke);
+    temporizadorKaraoke = null;
+    idGuia++;
+    silenciarSonidoEscucha();
+    const seguiaUnSilencio = enSilencio;
+    limpiarSilencioEscucha();
+    notaEnJuicio = null;
+    estadoKaraoke = 'pausada';
+    if (seguiaUnSilencio && notasLineaKaraoke[indiceNotaKaraoke]) {
+        mostrarPalabraKaraoke(notasLineaKaraoke[indiceNotaKaraoke].palabraIndex);
+    }
+    actualizarControlesKaraoke();
+}
+
+function seguirKaraoke() {
+    if (!modoKaraoke || estadoKaraoke !== 'pausada') return;
+    const nota = notasLineaKaraoke[indiceNotaKaraoke];
+    if (!nota) {
+        terminarKaraoke();
+        return;
+    }
+    estadoKaraoke = 'reproduciendo';
+    relojKaraoke = { t0: performance.now(), tiempoBase: nota.tiempo };
+    idGuia++;
+    actualizarControlesKaraoke();
+    emitirNotaKaraoke(idGuia);
+}
+
+function terminarKaraoke() {
+    if (estadoKaraoke === 'fin') return;
+    clearTimeout(temporizadorKaraoke);
+    temporizadorKaraoke = null;
+    limpiarSilencioEscucha();
+    silenciarSonidoEscucha();
+    notaEnJuicio = null;
+    estadoKaraoke = 'fin';
+
+    anotarCancionEstudiadaHoy();
+
+    const total = notasLineaKaraoke.length;
+    const promedio = total ? Math.round((aciertosKaraoke * 100) / total) : 0;
+    document.getElementById('palabra-pantalla').innerText = "🎉 Karaoke";
+    document.getElementById('secuencia-visual').innerHTML = "";
+
+    const resumen = document.createElement('div');
+    resumen.className = 'resumen-final';
+
+    const logro = document.createElement('div');
+    logro.className = 'resumen-logro';
+    logro.innerText = total === 1
+        ? `Has acertado ${aciertosKaraoke} de 1 nota.`
+        : `Has acertado ${aciertosKaraoke} de ${total} notas.`;
+    resumen.appendChild(logro);
+
+    const cifra = document.createElement('div');
+    cifra.className = 'karaoke-promedio';
+    cifra.innerText = `${promedio}%`;
+    resumen.appendChild(cifra);
+
+    const comentario = document.createElement('div');
+    comentario.className = 'resumen-titulo';
+    comentario.innerText = comentarioKaraoke(promedio);
+    resumen.appendChild(comentario);
+
+    document.getElementById('secuencia-visual').appendChild(resumen);
+    document.getElementById('evaluacion').innerHTML = `<span class="success">Promedio: ${promedio}%</span>`;
+    document.getElementById('zona-reinicio').style.display = 'flex';
+    actualizarFlechas();
+    actualizarControlesKaraoke();
+}
+
+function procesarKaraoke() {
+    if (estadoKaraoke !== 'reproduciendo' || !notaEnJuicio || notaEnJuicio.juzgada || !analyser) return;
+
+    const nota = notaEnJuicio;
+    analyser.getFloatTimeDomainData(dataArray);
+    const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
+    const caja = document.getElementById(`caja-nota-${nota.notaIndex}`);
+
+    if (frecuencia === -1 || frecuencia <= 60 || frecuencia >= 1000) {
+        if (caja) marcarDireccionAfinacion(caja, null);
+        return;
+    }
+
+    const cents = centsRespectoANota(frecuencia, nota.nombre, nota.ingles);
+    const absDesviacion = Math.abs(cents);
+
+    if (absDesviacion <= toleranciaCentsConfigurada) {
+        muestrasConsecutivasBien++;
+        if (caja) {
+            caja.className = nota.acertada ? "nota-caja completada" : "nota-caja activa";
+            marcarDireccionAfinacion(caja, null);
+        }
+        if (!nota.acertada && muestrasConsecutivasBien >= MUESTRAS_NECESARIAS) {
+            nota.acertada = true;
+            aciertosKaraoke++;
+            pintarAciertoKaraoke(nota);
+            actualizarMarcadorKaraoke();
+        }
+        return;
+    }
+
+    muestrasConsecutivasBien = 0;
+    if (!caja || nota.acertada) return;
+    const intensidad = absDesviacion <= (toleranciaCentsConfigurada + 15) ? "leve" : "fuerte";
+    caja.className = intensidad === "leve" ? "nota-caja umbral-amarillo" : "nota-caja umbral-rojo";
+    marcarDireccionAfinacion(caja, cents > 0 ? "aguda" : "grave", intensidad);
+}
+
 function regresarAlMenu() {
     cancelarTemporizadores();
     document.getElementById('titulo-cancion').style.display = "none";
     document.getElementById('controles-escucha').style.display = "none";
+    document.getElementById('controles-karaoke').style.display = "none";
     document.getElementById('status-box').style.display = "none";
     document.getElementById('evaluacion').innerHTML = "";
     document.getElementById('secuencia-visual').innerHTML = "";
