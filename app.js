@@ -18,6 +18,11 @@ const FEEDBACK_MAX_PALABRAS = 3;         // como mucho, estas palabras se sugier
 let tiemposPalabras = {};                // índice de palabra -> segundos que costó cantarla
 let inicioCantoMs = 0;                   // instante en que terminó la guía y se esperaba el canto
 let repasoActivo = false;                // true mientras se repasa una palabra desde el resumen final
+const AYUDA_NOTA_MS = 3000;              // voz sostenida, sin contar silencios, antes del borde blanco
+let msIntentandoNota = 0;
+let ultimoMsVoz = 0;
+let ayudaNotaLista = false;
+let notaCantadaAyuda = null;
 
 // ---- Guía sonora del modo entrenamiento ----
 const GUIA_PROPORCION_SOSTENIDO = 0.85;  // cada nota suena al menos el 85 % del tiempo hasta la siguiente...
@@ -539,9 +544,12 @@ function cargarNuevaFrasePalabra(sinGuia = false) {
         cajaNota.style.cursor = "pointer";
         
         cajaNota.onclick = () => {
-            if (!reproduciendoGuia && !modoEscucha) {
-                tocarNotaIndividualUsuario(notaIngles, cajaNota, idx, palabraMostradaIndex);
+            if (reproduciendoGuia || modoEscucha) return;
+            if (cajaNota.classList.contains('atascada') && idx === notaSecuenciaIndex) {
+                explicarNotaAtascada(notaIngles);
+                return;
             }
+            tocarNotaIndividualUsuario(notaIngles, cajaNota, idx, palabraMostradaIndex);
         };
         
         let anchoCalculado = 45 + (duracionNota * 60); 
@@ -574,6 +582,8 @@ function cargarNuevaFrasePalabra(sinGuia = false) {
         bloque.appendChild(flechaGrave);
         contenedorVisual.appendChild(bloque);
     });
+
+    reiniciarAyudaNota();
 
     if (!sinGuia) {
         inicioCantoMs = performance.now() + duracionGuiaMs(datosFrase);
@@ -744,6 +754,7 @@ function reiniciarDesdeSilaba(idxSilaba, idxPalabra) {
     notaSecuenciaIndex = idxSilaba;
     muestrasConsecutivasBien = 0;
     ultimaNotaValidadaTexto = "";
+    reiniciarAyudaNota();
     limpiarDireccionesAfinacion();
     document.getElementById('evaluacion').innerText = "";
 }
@@ -765,6 +776,64 @@ function limpiarDireccionesAfinacion() {
         el.classList.remove('visible', 'leve', 'fuerte');
     });
 }
+
+function reiniciarAyudaNota() {
+    msIntentandoNota = 0;
+    ultimoMsVoz = 0;
+    ayudaNotaLista = false;
+    notaCantadaAyuda = null;
+}
+
+// Solo cuenta el tiempo con voz. Un silencio pone el reloj en pausa, no a cero.
+function acumularIntentoNota(hayVoz) {
+    const ahora = performance.now();
+    if (!hayVoz) {
+        ultimoMsVoz = 0;
+        return;
+    }
+    if (ultimoMsVoz > 0) {
+        const transcurrido = ahora - ultimoMsVoz;
+        if (transcurrido > 0 && transcurrido < 250) msIntentandoNota += transcurrido;
+    }
+    ultimoMsVoz = ahora;
+    if (msIntentandoNota >= AYUDA_NOTA_MS) ayudaNotaLista = true;
+}
+
+function claseCaja(base) {
+    return ayudaNotaLista ? base + " atascada" : base;
+}
+
+function recordarNotaCantada(frecuencia, desviacionCents, notaObjetivoIngles) {
+    const midiCantado = Math.round(69 + 12 * Math.log2(frecuencia / 440));
+    const midiObjetivo = midiDesdeNombreIngles(notaObjetivoIngles);
+    const objetivoMasAgudo = midiCantado === midiObjetivo ? desviacionCents < 0 : midiObjetivo > midiCantado;
+    const octavaCantada = Math.floor(midiCantado / 12) - 1;
+    notaCantadaAyuda = {
+        nombre: nombreEspanolDesdeMidi(midiCantado),
+        ingles: NOMBRES_NOTA_INGLES[((midiCantado % 12) + 12) % 12] + octavaCantada,
+        objetivo: nombreEspanolDesdeMidi(midiObjetivo),
+        objetivoMasAgudo
+    };
+}
+
+function explicarNotaAtascada(notaObjetivoIngles) {
+    if (!notaCantadaAyuda) return;
+    reproduciendoGuia = true;
+    const idLocal = ++idGuia;
+    const cantada = notaCantadaAyuda;
+    const comparacion = cantada.objetivoMasAgudo ? "más aguda" : "más grave";
+    document.getElementById('evaluacion').innerHTML =
+        `Estás cantando <strong>${cantada.nombre}</strong> y tienes que cantar <strong>${cantada.objetivo}</strong>, que es ${comparacion}.`;
+    sonarNota(cantada.ingles, 1);
+    setTimeout(() => {
+        if (idLocal !== idGuia) return;
+        sonarNota(notaObjetivoIngles, 2);
+    }, 1000);
+    setTimeout(() => {
+        if (idLocal !== idGuia) return;
+        reproduciendoGuia = false;
+    }, 3000);
+}
 function bucleDeAudio() {
     requestAnimationFrame(bucleDeAudio);
     if (modoCalibracion) { procesarCalibracion(); return; }
@@ -780,8 +849,9 @@ function bucleDeAudio() {
     analyser.getFloatTimeDomainData(dataArray);
     const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
 
-    if (frecuencia === -1) {
+    if (frecuencia === -1 || frecuencia <= 60 || frecuencia >= 1000) {
         ultimaNotaValidadaTexto = "";
+        acumularIntentoNota(false);
         const cajaSilencio = document.getElementById(`caja-nota-${notaSecuenciaIndex}`);
         marcarDireccionAfinacion(cajaSilencio, null);
         return;
@@ -793,8 +863,11 @@ function bucleDeAudio() {
         const notaUsuarioTexto = hzANombreEspanol(frecuencia);
 
         if (notaUsuarioTexto === ultimaNotaValidadaTexto && notaSecuenciaIndex > 0 && datosFraseActual.notes[notaSecuenciaIndex - 1] === notaAInterpretar) {
+            ultimoMsVoz = 0;
             return;
         }
+
+        acumularIntentoNota(true);
 
         const idObjective = MAPA_NOTAS_A_NUMERO[notaAInterpretar.toLowerCase()];
 
@@ -830,11 +903,12 @@ function bucleDeAudio() {
             // AFINACIÓN CORRECTA (ZONA DE ESCUCHA ACTIVA)
             muestrasConsecutivasBien++;
             if (cajaActiva) {
-                cajaActiva.className = "nota-caja activa";
+                cajaActiva.className = claseCaja("nota-caja activa");
                 marcarDireccionAfinacion(cajaActiva, null);
             }
 
             if (muestrasConsecutivasBien >= MUESTRAS_NECESARIAS) {
+                reiniciarAyudaNota();
                 if (cajaActiva) {
                     cajaActiva.className = "nota-caja completada";
                     marcarDireccionAfinacion(cajaActiva, null);
@@ -873,13 +947,14 @@ function bucleDeAudio() {
             }
 
         
+            recordarNotaCantada(frecuencia, desviacionCents, notaAInterpretarIngles);
             if (cajaActiva) {
                 // --- AJUSTE DEFINITIVO: AMARILLO FIJO A TOLERANCIA + 15 CENTS ---
                 const intensidad = absDesviacion <= (toleranciaCentsConfigurada + 15) ? "leve" : "fuerte";
                 if (intensidad === "leve") {
-                    cajaActiva.className = "nota-caja umbral-amarillo"; // Rango intermedio visible
+                    cajaActiva.className = claseCaja("nota-caja umbral-amarillo"); // Rango intermedio visible
                 } else {
-                    cajaActiva.className = "nota-caja umbral-rojo";     // Fuera del amarillo (Alerta roja)
+                    cajaActiva.className = claseCaja("nota-caja umbral-rojo");     // Fuera del amarillo (Alerta roja)
                 }
                 marcarDireccionAfinacion(cajaActiva, desviacionCents > 0 ? "aguda" : "grave", intensidad);
             }
