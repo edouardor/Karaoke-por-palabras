@@ -253,6 +253,17 @@
     flex-wrap: wrap;
 }
 .btn-escucha { background: #00b0ff; color: #ffffff; }
+.btn-karaoke { background: #ff4081; color: #ffffff; }
+.botones-inicio button { flex: 1 1 180px; }
+.nota-caja.fallada { border-color: #ff8a80; color: #ff8a80; background: rgba(255, 82, 82, 0.12); }
+.karaoke-promedio {
+    font-size: 56px;
+    font-weight: 800;
+    color: #ffeb3b;
+    line-height: 1;
+    margin: 6px 0 12px;
+    text-shadow: 0 0 18px rgba(255, 235, 59, 0.35);
+}
 .btn-pausa { background: #ffd740; color: #121214; }
 .controles-escucha {
     display: flex;
