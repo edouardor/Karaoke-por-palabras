@@ -7,6 +7,7 @@
       },
       {
         "linea_completa": "Ve-ni-te, ve-ni-i-te in Beth-le-hem:",
+        "texto_visible": "Ve-ni-te, ve-ni-te in Beth-le-hem:",
         "silabas": ["Ve", "ni", "te", "ve", "ni", "i", "te", "in", "Beth", "le", "hem"]
       },
       {
@@ -15,6 +16,7 @@
       },
       {
         "linea_completa": "Ve-ni-te a-do-re-e-mu-us Do-mi-num.",
+        "texto_visible": "Ve-ni-te a-do-re-mus Do-mi-num.",
         "silabas": ["Ve", "ni", "te", "a", "do", "re", "e", "mu", "us", "Do", "mi", "num"]
       }
     ]
