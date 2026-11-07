@@ -438,7 +438,7 @@ function palabrasParaRepasar() {
 
 function textoLogroFinal(cantadas, fluidas) {
     if (cantadas > 0 && fluidas === cantadas) {
-        return 'Has llegado al final, y ha ido fluida. Si te apetece, repítela: la segunda vez suele sentarse mejor.';
+        return 'Has llegado al final, y ha ido fluida. Si te apetece, repítela: la segunda vez suele salir mejor.';
     }
     if (cantadas > 0 && fluidas * 2 >= cantadas) {
         return 'Has llegado al final. La mayor parte ha ido con soltura.';
