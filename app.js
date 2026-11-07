@@ -1146,27 +1146,30 @@ function sonarNota(nombreNotaIngles, duracion) {
     if (letra === "BB") letra = "A#";
     const frecuencia = (FRECUENCIAS_BASE_OCTAVA_0[letra] || 18.35) * Math.pow(2, octava);
 
-    const osc1 = audioContext.createOscillator();
-    const osc2 = audioContext.createOscillator();
     const ganancia = audioContext.createGain();
-    osc1.type = 'sine';
-    osc2.type = 'sine';
-    osc1.frequency.value = frecuencia;
-    osc2.frequency.value = frecuencia * 2;
+    // El fundamental manda. Si el armónico de la octava suena igual de fuerte,
+    // un altavoz pequeño lo destaca y la nota grave se oye una octava más alta.
+    // El tercer armónico, más flojo, evita esa confusión cuando el grave se pierde.
+    const niveles = [0.40, 0.10, 0.08];
+    const osciladores = niveles.map((nivel, i) => {
+        const osc = audioContext.createOscillator();
+        const parcial = audioContext.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = frecuencia * (i + 1);
+        parcial.gain.value = nivel;
+        osc.connect(parcial);
+        parcial.connect(ganancia);
+        osc.start();
+        osc.stop(ahora + dur);
+        return osc;
+    });
 
     ganancia.gain.setValueAtTime(0.30, ahora);
     ganancia.gain.setValueAtTime(0.30, ahora + Math.max(0, dur - 0.08));
     ganancia.gain.exponentialRampToValueAtTime(0.0001, ahora + dur);
-
-    osc1.connect(ganancia);
-    osc2.connect(ganancia);
     ganancia.connect(audioContext.destination);
-    osc1.start();
-    osc2.start();
-    osc1.stop(ahora + dur);
-    osc2.stop(ahora + dur);
 
-    sonidoEscuchaActual = { ganancia, osciladores: [osc1, osc2] };
+    sonidoEscuchaActual = { ganancia, osciladores };
 }
 
 // Apaga con un fundido corto la nota que esté sonando (al pausar o salir)
