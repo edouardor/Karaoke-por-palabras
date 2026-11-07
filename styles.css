@@ -273,6 +273,19 @@
     margin-top: 20px;
 }
 .controles-escucha button { padding: 12px 22px; font-size: 16px; }
+.aviso-auriculares {
+    flex: 1 1 100%;
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(0, 176, 255, 0.1);
+    border: 1px solid #00b0ff;
+    color: #b3e5fc;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.4;
+    text-align: left;
+}
 
 
 /* ===== Aviso de silencio largo en el modo escucha ===== */
