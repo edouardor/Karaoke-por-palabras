@@ -308,6 +308,26 @@
     line-height: 1;
     text-shadow: none;
 }
+.compas-karaoke {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin: 0 0 6px;
+    min-height: 26px;
+}
+.compas-karaoke[hidden] { display: none; }
+.compas-karaoke span {
+    font-size: 20px;
+    font-weight: 700;
+    color: #4a4a52;
+    width: 1.1em;
+    text-align: center;
+    line-height: 1.2;
+}
+.compas-karaoke span.activo {
+    color: #ffffff;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.7);
+}
 
 
 /* ===== Ayudas de pronunciación: lo que va entre paréntesis en texto_visible ===== */
