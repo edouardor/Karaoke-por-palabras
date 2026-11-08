@@ -1,0 +1,38 @@
+{
+  "titulo": "¡Escucha, los arcángeles cantan!",
+  "lineas": [
+    {
+      "linea_completa": "Al mor-tal, paz en la tie-rra;"
+    },
+    {
+      "linea_completa": "en los cie-los, glo-riaa Dios.",
+      "texto_visible":  "En los cielos, gloria_a Dios."
+    },  
+    {
+      "linea_completa": "Al mor-tal, paz en la tie-rra,"
+    },
+    {
+      "linea_completa": "can-ta la ce-les-te voz."
+    },
+    {
+      "linea_completa": "Con los cie-los a-la-be-mos;"
+    },
+    {
+      "linea_completa": "al e-ter-no Rey can-te-mos."
+    },
+    {
+      "linea_completa": "A Je-sús, a nues-tro bien,"
+    },
+    {
+      "linea_completa": "con el co-o-ro de Be-lén,",
+      "texto_visible": "con el coro de Belén,"
+    },
+    {
+      "linea_completa": "can-ta la ce-les-te voz:"
+    },
+    {
+      "linea_completa": "En los cie-e-los glo-riaa Dios.",
+      "texto_visible":  "En los cielos, gloria_a Dios."
+    }
+  ]
+}
