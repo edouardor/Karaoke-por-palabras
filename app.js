@@ -6,7 +6,7 @@ let muestrasConsecutivasBien = 0;
 const MUESTRAS_NECESARIAS = 3; 
 let reproduciendoGuia = false;
 let ultimaNotaValidadaTexto = "";
-let toleranciaCentsConfigurada = 45; 
+let toleranciaCentsConfigurada = 60; 
 let palabraMostradaIndex = 0;            // palabra que se ve en pantalla (para las flechas)
 let temporizadorSiguientePalabra = null; // pausa de 800 ms tras acertar una palabra
 let idGuia = 0;                          // identifica la reproducción de guía vigente
@@ -34,7 +34,10 @@ let modoEscucha = false;                 // true mientras se está en el modo es
 let estadoEscucha = 'reproduciendo';     // 'reproduciendo' | 'pausada' | 'fin'
 // ---- Modo karaoke: la melodía sigue sola y se puntúan las notas al vuelo ----
 let modoKaraoke = false;
-let estadoKaraoke = 'reproduciendo';     // 'reproduciendo' | 'pausada' | 'fin'
+let estadoKaraoke = 'reproduciendo';     // 'cuenta' | 'reproduciendo' | 'pausada' | 'fin'
+let cuentaKaraokePendiente = false;      // la pausa pilló el tono o la cuenta atrás
+let pulsosPorCompas = 4;
+let segundosPorPulso = 0.6;
 let modoSolicitado = 'entrenamiento';    // modo con el que se arrancó esta pieza
 let notasLineaKaraoke = [];              // todas las notas, en orden, con su palabra
 let indiceNotaKaraoke = 0;
@@ -71,6 +74,16 @@ function abrirAyuda() {
 
 function cerrarAyuda() {
     document.getElementById('ayuda').close();
+}
+
+// El margen del menú (15, 30, 45 o 60 cents) es el que usa el entrenamiento y el karaoke.
+function aplicarToleranciaDelMenu() {
+    const control = document.getElementById('selector-dificultad');
+    const valor = parseInt(control && control.value, 10);
+    if (valor === 15 || valor === 30 || valor === 45 || valor === 60) {
+        toleranciaCentsConfigurada = valor;
+    }
+    return toleranciaCentsConfigurada;
 }
 
 function etiquetaDificultad(valor) {
@@ -154,6 +167,7 @@ let audioContext;
 let analyser;
 let dataArray;
 let source;
+let streamMicrofono = null;
 
 const MAPA_NOTAS_A_NUMERO = {
     "do": 0, "c": 0, "do#": 1, "c#": 1, "re": 2, "d": 2, "re#": 3, "d#": 3,
@@ -238,6 +252,7 @@ async function cargarArchivoCancion(nombreArchivo) {
 
 async function iniciarApp(modo = 'entrenamiento') {
     try {
+        detenerPruebaMicrofono();
         cancelarTemporizadores();
         tiemposPalabras = {};
         FRASES_JUEGO = [];
@@ -246,7 +261,7 @@ async function iniciarApp(modo = 'entrenamiento') {
         muestrasConsecutivasBien = 0;
         ultimaNotaValidadaTexto = "";
 
-        toleranciaCentsConfigurada = parseInt(document.getElementById('selector-dificultad').value) || DIFICULTAD_INICIAL;
+        aplicarToleranciaDelMenu();
         exigenciaUsada = etiquetaDificultad(toleranciaCentsConfigurada);
         modoSolicitado = modo;
 
@@ -271,6 +286,7 @@ async function iniciarApp(modo = 'entrenamiento') {
 
         const datosNotas = await resNotas.json();
         let datosTexto = await resTexto.json();
+        guardarCompas(datosNotas);
 
         if (datosTexto.default) datosTexto = datosTexto.default;
 
@@ -521,6 +537,7 @@ function cargarNuevaFrasePalabra(sinGuia = false) {
     
     const datosFrase = FRASES_JUEGO[fraseActualIndex];
     const pantallaPalabra = document.getElementById('palabra-pantalla');
+    pantallaPalabra.className = "palabra-actual";
     if (datosFrase.palabraMarcada) {
         pantallaPalabra.innerHTML = htmlPalabraConPronunciacion(datosFrase.palabraMarcada);
     } else {
@@ -897,7 +914,6 @@ function bucleDeAudio() {
 
     if (frecuencia > 60 && frecuencia < 1000) {
         const valorMidiUsuario = 69 + 12 * Math.log2(frecuencia / 440);
-        const idUsuarioCromatico = Math.round(valorMidiUsuario) % 12;
         const notaUsuarioTexto = hzANombreEspanol(frecuencia);
 
         if (notaUsuarioTexto === ultimaNotaValidadaTexto && notaSecuenciaIndex > 0 && datosFraseActual.notes[notaSecuenciaIndex - 1] === notaAInterpretar) {
@@ -906,13 +922,6 @@ function bucleDeAudio() {
         }
 
         acumularIntentoNota(true);
-
-        const idObjective = MAPA_NOTAS_A_NUMERO[notaAInterpretar.toLowerCase()];
-
-        const distanciaCromatica = Math.min(
-            Math.abs(idUsuarioCromatico - idObjective), 
-            12 - Math.abs(idUsuarioCromatico - idObjective)
-        );
 
         let letraIngles = notaAInterpretarIngles.replace(/[0-9]/g, '').trim().toUpperCase();
         let octavaObjetivo = parseInt(notaAInterpretarIngles.replace(/[^0-9]/g, '')) || 4;
@@ -929,15 +938,11 @@ function bucleDeAudio() {
         const midiObjetivoPerfecto = 69 + 12 * Math.log2(frecuenciaObjetivoExacta / 440);
         let desviacionCents = (valorMidiUsuario - midiObjetivoPerfecto) * 100;
 
-        if (distanciaCromatica > 0) {
-            if (desviacionCents > 0) desviacionCents = 150;
-            if (desviacionCents < 0) desviacionCents = -150;
-        }
-
         let cajaActiva = document.getElementById(`caja-nota-${notaSecuenciaIndex}`);
         let absDesviacion = Math.abs(desviacionCents);
+        const margen = aplicarToleranciaDelMenu();
 
-        if (absDesviacion <= toleranciaCentsConfigurada) {
+        if (absDesviacion <= margen) {
             // AFINACIÓN CORRECTA (ZONA DE ESCUCHA ACTIVA)
             muestrasConsecutivasBien++;
             if (cajaActiva) {
@@ -988,7 +993,7 @@ function bucleDeAudio() {
             recordarNotaCantada(frecuencia, desviacionCents, notaAInterpretarIngles);
             if (cajaActiva) {
                 // --- AJUSTE DEFINITIVO: AMARILLO FIJO A TOLERANCIA + 15 CENTS ---
-                const intensidad = absDesviacion <= (toleranciaCentsConfigurada + 15) ? "leve" : "fuerte";
+                const intensidad = absDesviacion <= (margen + 15) ? "leve" : "fuerte";
                 if (intensidad === "leve") {
                     cajaActiva.className = claseCaja("nota-caja umbral-amarillo"); // Rango intermedio visible
                 } else {
@@ -1112,10 +1117,15 @@ function asegurarAudioContext() {
 }
 
 async function asegurarMicrofono() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        const error = new Error("Este navegador no deja usar el micrófono desde esta dirección.");
+        error.name = "SecurityError";
+        throw error;
+    }
     asegurarAudioContext();
     if (!analyser) {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        source = audioContext.createMediaStreamSource(stream);
+        streamMicrofono = await navigator.mediaDevices.getUserMedia({ audio: true });
+        source = audioContext.createMediaStreamSource(streamMicrofono);
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 2048;
         dataArray = new Float32Array(analyser.fftSize);
@@ -1124,6 +1134,106 @@ async function asegurarMicrofono() {
     if (audioContext.state === 'suspended') {
         await audioContext.resume();
     }
+}
+
+let pruebaMicroActiva = false;
+let idPruebaMicro = 0;
+let microYaOido = false;
+
+function nivelRms(buffer) {
+    let suma = 0;
+    for (let i = 0; i < buffer.length; i++) suma += buffer[i] * buffer[i];
+    return Math.sqrt(suma / buffer.length);
+}
+
+function mensajeErrorMicro(err) {
+    const nombre = err && err.name;
+    if (nombre === "NotAllowedError" || nombre === "PermissionDeniedError") {
+        return "El navegador ha bloqueado el micrófono. Permítelo en la barra de dirección y pulsa otra vez.";
+    }
+    if (nombre === "NotFoundError" || nombre === "DevicesNotFoundError") {
+        return "No hay ningún micrófono conectado.";
+    }
+    if (nombre === "NotReadableError" || nombre === "TrackStartError") {
+        return "El micrófono está en uso por otro programa.";
+    }
+    if (nombre === "SecurityError") {
+        return err.message;
+    }
+    return "No se ha podido abrir el micrófono." + (err && err.message ? " " + err.message : "");
+}
+
+function detenerPruebaMicrofono() {
+    pruebaMicroActiva = false;
+    idPruebaMicro++;
+}
+
+function ocultarResultadoMicrofono() {
+    detenerPruebaMicrofono();
+    microYaOido = false;
+    const caja = document.getElementById("resultado-micro");
+    if (caja) caja.hidden = true;
+    const texto = document.getElementById("texto-micro");
+    if (texto) {
+        texto.className = "texto-micro";
+        texto.textContent = "Pulsa y canta o habla un momento.";
+    }
+    const nivel = document.getElementById("nivel-micro");
+    if (nivel) nivel.style.width = "0%";
+}
+
+async function probarMicrofono() {
+    const texto = document.getElementById("texto-micro");
+    const caja = document.getElementById("resultado-micro");
+    caja.hidden = false;
+    texto.className = "texto-micro";
+    texto.textContent = "Pidiendo permiso al micrófono…";
+    document.getElementById("nivel-micro").style.width = "0%";
+    try {
+        await asegurarMicrofono();
+        const pista = streamMicrofono && streamMicrofono.getAudioTracks()[0];
+        if (pista && (pista.muted || pista.readyState !== "live")) {
+            texto.className = "texto-micro error";
+            texto.textContent = "El micrófono está abierto, pero la pista no está en marcha.";
+            return;
+        }
+        const nombre = pista && pista.label ? pista.label : "el micrófono";
+        texto.textContent = `«${nombre}» está abierto. Canta o habla: la barra tiene que moverse.`;
+        microYaOido = false;
+        pruebaMicroActiva = true;
+        const id = ++idPruebaMicro;
+        buclePruebaMicro(id);
+    } catch (err) {
+        detenerPruebaMicrofono();
+        texto.className = "texto-micro error";
+        texto.textContent = mensajeErrorMicro(err);
+    }
+}
+
+function buclePruebaMicro(id) {
+    if (!pruebaMicroActiva || id !== idPruebaMicro || !analyser) return;
+    analyser.getFloatTimeDomainData(dataArray);
+    const rms = nivelRms(dataArray);
+    document.getElementById("nivel-micro").style.width = Math.min(100, Math.round(rms * 450)) + "%";
+
+    const texto = document.getElementById("texto-micro");
+    if (rms >= 0.01) {
+        microYaOido = true;
+        const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
+        let nota = "";
+        if (frecuencia > 60 && frecuencia < 1000) {
+            const midi = Math.round(69 + 12 * Math.log2(frecuencia / 440));
+            nota = nombreEspanolDesdeMidi(midi);
+        }
+        texto.className = "texto-micro ok";
+        texto.textContent = nota
+            ? `Te oigo. Estás en ${nota}. El micrófono funciona.`
+            : "Te oigo. El micrófono funciona.";
+    } else if (!microYaOido) {
+        texto.className = "texto-micro";
+        texto.textContent = "El micrófono está abierto, pero aún no llega voz. Acércate y canta.";
+    }
+    requestAnimationFrame(() => buclePruebaMicro(id));
 }
 
 // ==========================================
@@ -1402,21 +1512,16 @@ function construirLineaKaraoke() {
 }
 
 // Misma cuenta de cents que el entrenamiento, para que la tolerancia se sienta igual.
-function centsRespectoANota(frecuencia, notaEspanol, notaIngles) {
+// El margen del menú se aplica sobre esta distancia real: no se sustituye por un tope fijo.
+function centsRespectoANota(frecuencia, notaIngles) {
     const valorMidiUsuario = 69 + 12 * Math.log2(frecuencia / 440);
-    const idUsuario = ((Math.round(valorMidiUsuario) % 12) + 12) % 12;
-    const idObjetivo = MAPA_NOTAS_A_NUMERO[notaEspanol.toLowerCase()];
-    const distancia = Math.min(Math.abs(idUsuario - idObjetivo), 12 - Math.abs(idUsuario - idObjetivo));
-
     let letra = notaIngles.replace(/[0-9]/g, '').trim().toUpperCase();
     const octava = parseInt(notaIngles.replace(/[^0-9]/g, '')) || 4;
     const bemoles = { "DB": "C#", "EB": "D#", "GB": "F#", "AB": "G#", "BB": "A#" };
     if (bemoles[letra]) letra = bemoles[letra];
     const hzObjetivo = (FRECUENCIAS_BASE_OCTAVA_0[letra] || 18.35) * Math.pow(2, octava);
     const midiObjetivo = 69 + 12 * Math.log2(hzObjetivo / 440);
-    let cents = (valorMidiUsuario - midiObjetivo) * 100;
-    if (distancia > 0) cents = cents >= 0 ? 150 : -150;
-    return cents;
+    return (valorMidiUsuario - midiObjetivo) * 100;
 }
 
 function comentarioKaraoke(porcentaje) {
@@ -1431,8 +1536,9 @@ function comentarioKaraoke(porcentaje) {
 function actualizarMarcadorKaraoke() {
     const total = notasLineaKaraoke.length;
     const van = Math.min(indiceNotaKaraoke + 1, total);
+    const margen = aplicarToleranciaDelMenu();
     document.getElementById('evaluacion').innerText =
-        `🎤 Karaoke · ${aciertosKaraoke} aciertos · nota ${van} de ${total}`;
+        `🎤 ${etiquetaDificultad(margen)} · ±${margen} cents · ${aciertosKaraoke} aciertos · nota ${van} de ${total}`;
 }
 
 function actualizarControlesKaraoke() {
@@ -1440,11 +1546,11 @@ function actualizarControlesKaraoke() {
     if (!caja) return;
     caja.style.display = modoKaraoke ? 'flex' : 'none';
     if (!modoKaraoke) return;
-    const sonando = estadoKaraoke === 'reproduciendo';
-    document.getElementById('btn-pausa-karaoke').style.display = sonando ? 'inline-block' : 'none';
+    const enMarcha = estadoKaraoke === 'reproduciendo' || estadoKaraoke === 'cuenta';
+    document.getElementById('btn-pausa-karaoke').style.display = enMarcha ? 'inline-block' : 'none';
     document.getElementById('btn-seguir-karaoke').style.display = estadoKaraoke === 'pausada' ? 'inline-block' : 'none';
     document.getElementById('btn-repetir-karaoke').style.display = estadoKaraoke === 'fin' ? 'inline-block' : 'none';
-    if (sonando) actualizarMarcadorKaraoke();
+    if (estadoKaraoke === 'reproduciendo') actualizarMarcadorKaraoke();
     if (estadoKaraoke === 'pausada') document.getElementById('evaluacion').innerText = "⏸ Karaoke en pausa";
 }
 
@@ -1555,6 +1661,82 @@ function cerrarNotaKaraoke(idEjecucion, finJuicio) {
     programarKaraoke(siguiente.tiempo, () => emitirNotaKaraoke(idEjecucion), idEjecucion);
 }
 
+function guardarCompas(datosNotas) {
+    const header = (datosNotas && datosNotas.header) || {};
+    const firma = header.timeSignatures && header.timeSignatures[0] && header.timeSignatures[0].timeSignature;
+    const numerador = firma && firma[0] ? firma[0] : 4;
+    const denominador = firma && firma[1] ? firma[1] : 4;
+    const bpm = (header.tempos && header.tempos[0] && header.tempos[0].bpm) || 100;
+    pulsosPorCompas = Math.min(12, Math.max(1, Math.round(numerador)));
+    segundosPorPulso = (60 / bpm) * (4 / denominador);
+}
+
+function clicDeCompas(acentuado) {
+    asegurarAudioContext();
+    const ahora = audioContext.currentTime;
+    const osc = audioContext.createOscillator();
+    const ganancia = audioContext.createGain();
+    osc.type = "square";
+    osc.frequency.value = acentuado ? 1400 : 900;
+    ganancia.gain.setValueAtTime(acentuado ? 0.18 : 0.09, ahora);
+    ganancia.gain.exponentialRampToValueAtTime(0.0001, ahora + 0.06);
+    osc.connect(ganancia);
+    ganancia.connect(audioContext.destination);
+    osc.start(ahora);
+    osc.stop(ahora + 0.06);
+}
+
+function mostrarCuentaKaraoke(texto, detalle) {
+    const pantalla = document.getElementById("palabra-pantalla");
+    pantalla.className = "palabra-actual cuenta";
+    pantalla.innerText = texto;
+    document.getElementById("evaluacion").innerText = detalle || "";
+}
+
+function programarPasoCuenta(esperaMs, accion, idEjecucion) {
+    temporizadorKaraoke = setTimeout(() => {
+        if (!modoKaraoke || idEjecucion !== idGuia || estadoKaraoke !== "cuenta") return;
+        accion();
+    }, esperaMs);
+}
+
+// Primero suena la nota con la que empieza la canción. Luego un compás de cuenta atrás.
+function prepararEntradaKaraoke(idEjecucion) {
+    if (!modoKaraoke || idEjecucion !== idGuia) return;
+    const nota = notasLineaKaraoke[indiceNotaKaraoke];
+    if (!nota) {
+        terminarKaraoke();
+        return;
+    }
+    estadoKaraoke = "cuenta";
+    notaEnJuicio = null;
+    mostrarPalabraKaraoke(nota.palabraIndex);
+    const nombre = nombreEspanolDesdeMidi(midiDesdeNombreIngles(nota.ingles));
+    mostrarCuentaKaraoke(nombre, "Tono");
+    sonarNota(nota.ingles, Math.max(1, segundosPorPulso * 2));
+    actualizarControlesKaraoke();
+    programarPasoCuenta(Math.max(1000, segundosPorPulso * 2000), () => {
+        silenciarSonidoEscucha();
+        pulsarCuentaKaraoke(idEjecucion, pulsosPorCompas);
+    }, idEjecucion);
+}
+
+function pulsarCuentaKaraoke(idEjecucion, numero) {
+    if (!modoKaraoke || idEjecucion !== idGuia || estadoKaraoke !== "cuenta") return;
+    if (numero < 1) {
+        estadoKaraoke = "reproduciendo";
+        const primera = notasLineaKaraoke[indiceNotaKaraoke];
+        relojKaraoke = { t0: performance.now(), tiempoBase: primera.tiempo };
+        palabraMostradaIndex = -1;
+        actualizarControlesKaraoke();
+        emitirNotaKaraoke(idEjecucion);
+        return;
+    }
+    mostrarCuentaKaraoke(String(numero), "");
+    clicDeCompas(numero === pulsosPorCompas);
+    programarPasoCuenta(segundosPorPulso * 1000, () => pulsarCuentaKaraoke(idEjecucion, numero - 1), idEjecucion);
+}
+
 function iniciarKaraokeDesde(indicePalabra) {
     cancelarTemporizadores();
     if (!FRASES_JUEGO.length) return;
@@ -1568,7 +1750,8 @@ function iniciarKaraokeDesde(indicePalabra) {
     }
 
     modoKaraoke = true;
-    estadoKaraoke = 'reproduciendo';
+    estadoKaraoke = "cuenta";
+    cuentaKaraokePendiente = false;
     fraseActualIndex = notasLineaKaraoke[indiceNotaKaraoke].palabraIndex;
     document.getElementById('zona-reinicio').style.display = 'none';
     document.getElementById('controles-escucha').style.display = 'none';
@@ -1577,12 +1760,12 @@ function iniciarKaraokeDesde(indicePalabra) {
     relojKaraoke = { t0: performance.now(), tiempoBase: primera.tiempo };
     palabraMostradaIndex = -1;             // obliga a dibujar la primera palabra
     idGuia++;
-    actualizarControlesKaraoke();
-    emitirNotaKaraoke(idGuia);
+    prepararEntradaKaraoke(idGuia);
 }
 
 function pausarKaraoke() {
-    if (!modoKaraoke || estadoKaraoke !== 'reproduciendo') return;
+    if (!modoKaraoke || (estadoKaraoke !== 'reproduciendo' && estadoKaraoke !== 'cuenta')) return;
+    cuentaKaraokePendiente = estadoKaraoke === 'cuenta';
     clearTimeout(temporizadorKaraoke);
     temporizadorKaraoke = null;
     idGuia++;
@@ -1604,9 +1787,14 @@ function seguirKaraoke() {
         terminarKaraoke();
         return;
     }
-    estadoKaraoke = 'reproduciendo';
     relojKaraoke = { t0: performance.now(), tiempoBase: nota.tiempo };
     idGuia++;
+    if (cuentaKaraokePendiente) {
+        cuentaKaraokePendiente = false;
+        prepararEntradaKaraoke(idGuia);
+        return;
+    }
+    estadoKaraoke = 'reproduciendo';
     actualizarControlesKaraoke();
     emitirNotaKaraoke(idGuia);
 }
@@ -1666,10 +1854,11 @@ function procesarKaraoke() {
         return;
     }
 
-    const cents = centsRespectoANota(frecuencia, nota.nombre, nota.ingles);
+    const margen = aplicarToleranciaDelMenu();
+    const cents = centsRespectoANota(frecuencia, nota.ingles);
     const absDesviacion = Math.abs(cents);
 
-    if (absDesviacion <= toleranciaCentsConfigurada) {
+    if (absDesviacion <= margen) {
         muestrasConsecutivasBien++;
         if (caja) {
             caja.className = nota.acertada ? "nota-caja completada" : "nota-caja activa";
@@ -1684,14 +1873,15 @@ function procesarKaraoke() {
         return;
     }
 
-    muestrasConsecutivasBien = 0;
+    // Un frame fuera no borra los que ya entraron en el margen: la nota vale si la voz pasa por él.
     if (!caja || nota.acertada) return;
-    const intensidad = absDesviacion <= (toleranciaCentsConfigurada + 15) ? "leve" : "fuerte";
+    const intensidad = absDesviacion <= (margen + 15) ? "leve" : "fuerte";
     caja.className = intensidad === "leve" ? "nota-caja umbral-amarillo" : "nota-caja umbral-rojo";
     marcarDireccionAfinacion(caja, cents > 0 ? "aguda" : "grave", intensidad);
 }
 
 function regresarAlMenu() {
+    ocultarResultadoMicrofono();
     cancelarTemporizadores();
     document.getElementById('titulo-cancion').style.display = "none";
     document.getElementById('controles-escucha').style.display = "none";
