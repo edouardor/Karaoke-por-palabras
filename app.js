@@ -42,6 +42,7 @@ let modoSolicitado = 'entrenamiento';    // modo con el que se arrancó esta pie
 let notasLineaKaraoke = [];              // todas las notas, en orden, con su palabra
 let indiceNotaKaraoke = 0;
 let notaEnJuicio = null;                 // nota que se está puntuando ahora mismo
+let framesDesafinadosKaraoke = 0;        // frames seguidos con un tono claro y fuera de margen
 let aciertosKaraoke = 0;
 let temporizadorKaraoke = null;
 let relojKaraoke = { t0: 0, tiempoBase: 0 };
@@ -193,25 +194,29 @@ function autoCorrelacion(buffer, sampleRate) {
     let SIZE = buffer.length; let rrms = 0;
     for (let i = 0; i < SIZE; i++) { rrms += buffer[i] * buffer[i]; }
     rrms = Math.sqrt(rrms / SIZE);
-    if (rrms < 0.015) return -1;
+    if (rrms < 0.02) return -1;
 
     let r1 = 0, r2 = SIZE - 1, thres = 0.2;
     for (let i = 0; i < SIZE / 2; i++) { if (Math.abs(buffer[i]) < thres) { r1 = i; break; } }
     for (let i = SIZE - 1; i >= SIZE / 2; i--) { if (Math.abs(buffer[i]) < thres) { r2 = i; break; } }
     buffer = buffer.slice(r1, r2); SIZE = buffer.length;
+    if (SIZE < 8) return -1;
 
     let c = new Float32Array(SIZE);
     for (let i = 0; i < SIZE; i++) {
         for (let j = 0; j < SIZE - i; j++) { c[i] = c[i] + buffer[j] * buffer[j + i]; }
     }
-    let d = 0; while (c[d] > c[d + 1]) d++;
+    let d = 0; while (d < SIZE - 1 && c[d] > c[d + 1]) d++;
     let maxval = -1, maxpos = -1;
     for (let i = d; i < SIZE; i++) { if (c[i] > maxval) { maxval = c[i]; maxpos = i; } }
+    // Sin un pico periódico claro es ruido de fondo, no una nota cantada.
+    if (maxpos < 2 || maxpos >= SIZE - 1 || !(c[0] > 0) || maxval / c[0] < 0.35) return -1;
     let T0 = maxpos;
     let x1 = c[T0 - 1], x2 = c[T0], x3 = c[T0 + 1];
     let a = (x1 + x3 - 2 * x2) / 2; let b = (x3 - x1) / 2;
     if (a) T0 = T0 - b / (2 * a);
-    return sampleRate / T0;
+    const frecuencia = sampleRate / T0;
+    return Number.isFinite(frecuencia) ? frecuencia : -1;
 }
 // Varias formas de pedir el mismo archivo: con ñ/tildes en NFC o NFD, y con el
 // nombre escapado. Si una petición se corta ("Failed to fetch"), se prueba la siguiente.
@@ -587,7 +592,14 @@ function cargarNuevaFrasePalabra(sinGuia = false) {
         cajaNota.style.cursor = "pointer";
         
             cajaNota.onclick = () => {
-            if (reproduciendoGuia || modoEscucha || modoKaraoke) return;
+            if (modoEscucha) {
+                if (estadoEscucha === 'pausada') {
+                    silenciarSonidoEscucha();
+                    sonarNota(notaIngles, Math.max(duracionNota, 0.4));
+                }
+                return;
+            }
+            if (reproduciendoGuia || modoKaraoke) return;
             if (cajaNota.classList.contains('atascada') && idx === notaSecuenciaIndex) {
                 explicarNotaAtascada(notaIngles);
                 return;
@@ -1116,6 +1128,31 @@ function asegurarAudioContext() {
     }
 }
 
+async function abrirStreamMicrofono() {
+    // En el Mac, Chrome y Safari quitan del micrófono lo que suena por el altavoz.
+    // En el karaoke esa melodía es la misma que la voz, así que también se la llevan
+    // y la nota no llega a ponerse verde. El entrenamiento no lo nota: la guía ya ha parado.
+    const pedidos = [
+        { echoCancellation: false, noiseSuppression: false, autoGainControl: false, voiceIsolation: false },
+        { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+    ];
+    let ultimoError = null;
+    for (const audio of pedidos) {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio });
+            const pista = stream.getAudioTracks()[0];
+            if (pista && pista.applyConstraints) {
+                try { await pista.applyConstraints(audio); } catch (e) { /* el navegador no aplica alguno */ }
+            }
+            return stream;
+        } catch (e) {
+            ultimoError = e;
+            if (e.name !== "OverconstrainedError" && e.name !== "ConstraintNotSatisfiedError") throw e;
+        }
+    }
+    throw ultimoError;
+}
+
 async function asegurarMicrofono() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         const error = new Error("Este navegador no deja usar el micrófono desde esta dirección.");
@@ -1124,7 +1161,7 @@ async function asegurarMicrofono() {
     }
     asegurarAudioContext();
     if (!analyser) {
-        streamMicrofono = await navigator.mediaDevices.getUserMedia({ audio: true });
+        streamMicrofono = await abrirStreamMicrofono();
         source = audioContext.createMediaStreamSource(streamMicrofono);
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 2048;
@@ -1244,6 +1281,7 @@ function buclePruebaMicro(id) {
 
 function sonarNota(nombreNotaIngles, duracion) {
     asegurarAudioContext();
+    silenciarSonidoEscucha();
     const dur = Math.max(duracion || 0.4, 0.12);
     const ahora = audioContext.currentTime;
 
@@ -1632,6 +1670,7 @@ function emitirNotaKaraoke(idEjecucion) {
 
     notaEnJuicio = nota;
     muestrasConsecutivasBien = 0;
+    framesDesafinadosKaraoke = 0;
     ultimaNotaValidadaTexto = "";
     destacarNotaKaraoke(nota);
     sonarNota(nota.ingles, nota.duracion);
@@ -1850,7 +1889,13 @@ function procesarKaraoke() {
     const caja = document.getElementById(`caja-nota-${nota.notaIndex}`);
 
     if (frecuencia === -1 || frecuencia <= 60 || frecuencia >= 1000) {
-        if (caja) marcarDireccionAfinacion(caja, null);
+        framesDesafinadosKaraoke = 0;
+        if (caja && !nota.acertada) {
+            caja.className = "nota-caja activa";
+            marcarDireccionAfinacion(caja, null);
+        } else if (caja) {
+            marcarDireccionAfinacion(caja, null);
+        }
         return;
     }
 
@@ -1859,6 +1904,7 @@ function procesarKaraoke() {
     const absDesviacion = Math.abs(cents);
 
     if (absDesviacion <= margen) {
+        framesDesafinadosKaraoke = 0;
         muestrasConsecutivasBien++;
         if (caja) {
             caja.className = nota.acertada ? "nota-caja completada" : "nota-caja activa";
@@ -1873,8 +1919,9 @@ function procesarKaraoke() {
         return;
     }
 
-    // Un frame fuera no borra los que ya entraron en el margen: la nota vale si la voz pasa por él.
-    if (!caja || nota.acertada) return;
+    // Un frame de ruido no basta: hace falta un tono claro y sostenido para marcar el error.
+    framesDesafinadosKaraoke++;
+    if (!caja || nota.acertada || framesDesafinadosKaraoke < MUESTRAS_NECESARIAS) return;
     const intensidad = absDesviacion <= (margen + 15) ? "leve" : "fuerte";
     caja.className = intensidad === "leve" ? "nota-caja umbral-amarillo" : "nota-caja umbral-rojo";
     marcarDireccionAfinacion(caja, cents > 0 ? "aguda" : "grave", intensidad);
