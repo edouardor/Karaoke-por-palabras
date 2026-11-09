@@ -1191,14 +1191,24 @@ function asegurarAudioContext() {
     }
 }
 
+function esTelefono() {
+    const ua = navigator.userAgent || "";
+    if (/Android|iPhone|iPad|iPod/i.test(ua)) return true;
+    // iPadOS se presenta como Mac, pero tiene pantalla táctil.
+    return navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+}
+
 async function abrirStreamMicrofono() {
     // En el Mac, Chrome y Safari quitan del micrófono lo que suena por el altavoz.
     // En el karaoke esa melodía es la misma que la voz, así que también se la llevan
-    // y la nota no llega a ponerse verde. El entrenamiento no lo nota: la guía ya ha parado.
-    const pedidos = [
-        { echoCancellation: false, noiseSuppression: false, autoGainControl: false, voiceIsolation: false },
-        { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-    ];
+    // y la nota no llega a ponerse verde. En el teléfono no pasa, y sin la subida
+    // automática de volumen hay que cantar muy fuerte para que el micrófono entre.
+    const pedidos = esTelefono()
+        ? [{ echoCancellation: true, noiseSuppression: true, autoGainControl: true }]
+        : [
+            { echoCancellation: false, noiseSuppression: false, autoGainControl: false, voiceIsolation: false },
+            { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+        ];
     let ultimoError = null;
     for (const audio of pedidos) {
         try {
