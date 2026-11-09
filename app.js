@@ -17,6 +17,8 @@ const FEEDBACK_SEGUNDOS_LENTA = 10;      // una palabra "costó más" si se tard
 const FEEDBACK_MAX_PALABRAS = 3;         // como mucho, estas palabras se sugieren para repasar
 let tiemposPalabras = {};                // índice de palabra -> segundos que costó cantarla
 let inicioCantoMs = 0;                   // instante en que terminó la guía y se esperaba el canto
+let finNotaEntrenamientoMs = 0;          // la nota siguiente no se valora antes de este instante
+let notaEntrenamientoSuperada = false;   // ya está afinada, pero su tiempo aún no ha acabado
 let repasoActivo = false;                // true mientras se repasa una palabra desde el resumen final
 const AYUDA_NOTA_MS = 3000;              // voz sostenida, sin contar silencios, antes del borde blanco
 let msIntentandoNota = 0;
@@ -628,14 +630,9 @@ function cargarNuevaFrasePalabra(sinGuia = false) {
         
         if (valorMidiPrimeraReferencia !== undefined && MAPA_NOTAS_A_NUMERO[letraActual.toLowerCase()] !== undefined) {
             let valorMidiActual = (octavaActual * 12) + MAPA_NOTAS_A_NUMERO[letraActual.toLowerCase()];
-            let diferenciaSemitonosReales = valorMidiActual - valorMidiPrimeraReferencia;
-            let desplazamientoPixeles = diferenciaSemitonosReales * -5; 
-            
-            bloque.style.transform = `translateY(${desplazamientoPixeles}px)`;
-            bloque.style.marginTop = "45px"; 
-            bloque.style.marginBottom = "45px";
+            bloque.dataset.semitonos = String(valorMidiActual - valorMidiPrimeraReferencia);
         }
-        
+
         bloque.appendChild(divSilaba);
         bloque.appendChild(flechaAguda);
         bloque.appendChild(cajaNota);
@@ -643,10 +640,31 @@ function cargarNuevaFrasePalabra(sinGuia = false) {
         contenedorVisual.appendChild(bloque);
     });
 
+    // Un semitono separa las celdas media altura de celda. El margen reserva
+    // ese desplazamiento, porque translateY no ocupa sitio en la fila.
+    const celdasAltura = contenedorVisual.querySelector('.nota-caja');
+    const altoCelda = (celdasAltura && celdasAltura.offsetHeight) || 40;
+    const pxPorSemitono = altoCelda / 2;
+    const bloquesAltura = [...contenedorVisual.querySelectorAll('.nota-bloque')];
+    let maxArriba = 0;
+    let maxAbajo = 0;
+    const desplazamientos = bloquesAltura.map(bloque => {
+        const y = -Number(bloque.dataset.semitonos || 0) * pxPorSemitono;
+        maxArriba = Math.max(maxArriba, -y);
+        maxAbajo = Math.max(maxAbajo, y);
+        return y;
+    });
+    bloquesAltura.forEach((bloque, i) => {
+        bloque.style.marginTop = maxArriba + "px";
+        bloque.style.marginBottom = maxAbajo + "px";
+        bloque.style.transform = `translateY(${desplazamientos[i]}px)`;
+    });
+
     reiniciarAyudaNota();
 
     if (!sinGuia) {
         inicioCantoMs = performance.now() + duracionGuiaMs(datosFrase);
+        armarRelojNotaEntrenamiento(inicioCantoMs);
         idGuia++;
         reproducirCadenaNotasGuia(datosFrase.notesIngles, datosFrase.duraciones, 0, idGuia, datosFrase.tiempos);
     }
@@ -826,6 +844,7 @@ function reiniciarDesdeSilaba(idxSilaba, idxPalabra) {
     notaSecuenciaIndex = idxSilaba;
     muestrasConsecutivasBien = 0;
     ultimaNotaValidadaTexto = "";
+    armarRelojNotaEntrenamiento(performance.now());
     reiniciarAyudaNota();
     limpiarDireccionesAfinacion();
     document.getElementById('evaluacion').innerText = "";
@@ -906,6 +925,67 @@ function explicarNotaAtascada(notaObjetivoIngles) {
         reproduciendoGuia = false;
     }, 3000);
 }
+// Igual que en karaoke: la nota ocupa su duración (o hasta que empieza la siguiente).
+// Hasta entonces no se valora la que viene, aunque esta ya esté verde.
+function duracionNotaEntrenamiento(datos, indice) {
+    const inicio = datos.tiempos[indice] || 0;
+    const finNatural = inicio + (datos.duraciones[indice] || 0.4);
+    const siguiente = datos.tiempos[indice + 1];
+    const fin = (typeof siguiente === "number") ? Math.min(finNatural, siguiente) : finNatural;
+    return Math.max(0.12, fin - inicio);
+}
+
+function armarRelojNotaEntrenamiento(desdeMs) {
+    const datos = FRASES_JUEGO[fraseActualIndex];
+    notaEntrenamientoSuperada = false;
+    if (!datos || notaSecuenciaIndex >= datos.notes.length) {
+        finNotaEntrenamientoMs = desdeMs;
+        return;
+    }
+    finNotaEntrenamientoMs = desdeMs + duracionNotaEntrenamiento(datos, notaSecuenciaIndex) * 1000;
+}
+
+function marcarNotaEntrenamientoSuperada(caja) {
+    if (notaEntrenamientoSuperada) return;
+    notaEntrenamientoSuperada = true;
+    reiniciarAyudaNota();
+    if (caja) {
+        caja.className = "nota-caja completada";
+        marcarDireccionAfinacion(caja, null);
+    }
+}
+
+function avanzarNotaEntrenamiento() {
+    const datos = FRASES_JUEGO[fraseActualIndex];
+    if (!datos) return;
+    notaEntrenamientoSuperada = false;
+    muestrasConsecutivasBien = 0;
+    notaSecuenciaIndex++;
+
+    if (notaSecuenciaIndex >= datos.notes.length) {
+        document.getElementById('evaluacion').innerHTML = "<span class='success'>¡Palabra correcta! ✨</span>";
+        registrarTiempoPalabra(fraseActualIndex);
+        fraseActualIndex++;
+        if (repasoActivo) {
+            repasoActivo = false;
+            fraseActualIndex = FRASES_JUEGO.length;
+        } else if (fraseActualIndex >= FRASES_JUEGO.length) {
+            anotarCancionEstudiadaHoy();
+        }
+        ultimaNotaValidadaTexto = "";
+        esperandoSiguientePalabra = true;
+        temporizadorSiguientePalabra = setTimeout(() => {
+            document.getElementById('evaluacion').innerText = "";
+            cargarNuevaFrasePalabra();
+        }, 800);
+        return;
+    }
+
+    const siguienteCaja = document.getElementById(`caja-nota-${notaSecuenciaIndex}`);
+    if (siguienteCaja) siguienteCaja.className = "nota-caja activa";
+    armarRelojNotaEntrenamiento(performance.now());
+}
+
 function bucleDeAudio() {
     requestAnimationFrame(bucleDeAudio);
     if (modoCalibracion) { procesarCalibracion(); return; }
@@ -923,6 +1003,11 @@ function bucleDeAudio() {
     const notaAInterpretarIngles = datosFraseActual.notesIngles[notaSecuenciaIndex];
     if (!notaAInterpretar || !notaAInterpretarIngles) return; // seguridad: índice fuera de la palabra
 
+    if (notaEntrenamientoSuperada) {
+        if (performance.now() >= finNotaEntrenamientoMs) avanzarNotaEntrenamiento();
+        return;
+    }
+
     analyser.getFloatTimeDomainData(dataArray);
     const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
 
@@ -937,11 +1022,6 @@ function bucleDeAudio() {
     if (frecuencia > 60 && frecuencia < 1000) {
         const valorMidiUsuario = 69 + 12 * Math.log2(frecuencia / 440);
         const notaUsuarioTexto = hzANombreEspanol(frecuencia);
-
-        if (notaUsuarioTexto === ultimaNotaValidadaTexto && notaSecuenciaIndex > 0 && datosFraseActual.notes[notaSecuenciaIndex - 1] === notaAInterpretar) {
-            ultimoMsVoz = 0;
-            return;
-        }
 
         acumularIntentoNota(true);
 
@@ -973,36 +1053,9 @@ function bucleDeAudio() {
             }
 
             if (muestrasConsecutivasBien >= MUESTRAS_NECESARIAS) {
-                reiniciarAyudaNota();
-                if (cajaActiva) {
-                    cajaActiva.className = "nota-caja completada";
-                    marcarDireccionAfinacion(cajaActiva, null);
-                }
-                
                 ultimaNotaValidadaTexto = notaUsuarioTexto;
-                notaSecuenciaIndex++;
-                muestrasConsecutivasBien = 0;
-                
-                if (notaSecuenciaIndex >= datosFraseActual.notes.length) {
-                    document.getElementById('evaluacion').innerHTML = "<span class='success'>¡Palabra correcta! ✨</span>";
-                    registrarTiempoPalabra(fraseActualIndex);
-                    fraseActualIndex++;
-                    if (repasoActivo) {              // se estaba repasando: se vuelve al resumen final, sin apuntar otra vez la pieza
-                        repasoActivo = false;
-                        fraseActualIndex = FRASES_JUEGO.length;
-                    } else if (fraseActualIndex >= FRASES_JUEGO.length) {
-                        anotarCancionEstudiadaHoy();
-                    }
-                    ultimaNotaValidadaTexto = ""; 
-                    esperandoSiguientePalabra = true; // ignora el micro hasta cargar la siguiente palabra
-                    temporizadorSiguientePalabra = setTimeout(() => {
-                        document.getElementById('evaluacion').innerText = "";
-                        cargarNuevaFrasePalabra();
-                    }, 800);
-                } else {
-                    let siguienteCaja = document.getElementById(`caja-nota-${notaSecuenciaIndex}`);
-                    if (siguienteCaja) siguienteCaja.className = "nota-caja activa";
-                }
+                marcarNotaEntrenamientoSuperada(cajaActiva);
+                if (performance.now() >= finNotaEntrenamientoMs) avanzarNotaEntrenamiento();
             }
         } else {
             // DESVIACIÓN DE AFINACIÓN fuera del rango elástico base
