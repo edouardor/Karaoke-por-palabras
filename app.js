@@ -1349,8 +1349,8 @@ function volverACalentamientos() {
 }
 
 function empezarCalentamiento(numero) {
-    if (numero !== 1) return;
-    piezaPendiente = "Calentamiento 1";
+    if (numero !== 1 && numero !== 2) return;
+    piezaPendiente = "Calentamiento " + numero;
     document.getElementById("lista-calentamiento").hidden = true;
     iniciarApp("karaoke");
 }
