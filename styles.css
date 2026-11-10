@@ -76,7 +76,11 @@
         .nota-caja.atascada { border-color: #ffffff; box-shadow: 0 0 8px rgba(255,255,255,0.45); } 
         
         .prueba-micro { margin: 0 0 22px; }
+        .fila-pruebas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
         .prueba-micro button { background: #00b0ff; color: #fff; }
+        .lista-calentamiento { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 12px; }
+        .lista-calentamiento[hidden] { display: none; }
+        .lista-calentamiento button { min-width: 72px; padding: 10px 16px; background: #ff4081; color: #fff; }
         .resultado-micro { margin-top: 14px; }
         .medidor-micro { height: 14px; background: #2a2a30; border-radius: 8px; overflow: hidden; border: 1px solid #444; }
         #nivel-micro { height: 100%; width: 0; background: #00e676; }
@@ -140,6 +144,8 @@
 .barra-superior {
     display: flex;
     justify-content: flex-start;
+    align-items: center;
+    gap: 12px;
     margin-bottom: 15px;
 }
 .btn-home {
@@ -154,6 +160,21 @@
     background: rgba(0,176,255,0.15);
     border-color: #00b0ff;
 }
+#zona-seleccion > .barra-superior { display: none; margin-bottom: 8px; }
+body.vista-calentamiento #zona-seleccion > .barra-superior { display: flex; }
+body.vista-calentamiento #btn-probar-micro,
+body.vista-calentamiento #elige-pieza,
+body.vista-calentamiento #botones-inicio { display: none !important; }
+body.vista-calentamiento #btn-calentamiento {
+    background: transparent;
+    color: #fff;
+    border: none;
+    padding: 0;
+    font-size: 28px;
+    cursor: default;
+    pointer-events: none;
+}
+body.vista-calentamiento #btn-calentamiento:hover { transform: none; }
 
 
 /* ===== Título de la canción junto al nombre del coro ===== */
@@ -281,6 +302,15 @@
     margin-top: 20px;
 }
 .controles-escucha button { padding: 12px 22px; font-size: 16px; }
+.control-velocidad {
+    flex: 1 1 100%;
+    color: #eee;
+    font-size: 15px;
+    font-weight: 600;
+    text-align: left;
+}
+.control-velocidad span { color: #ff4081; }
+.control-velocidad input { width: 100%; margin-top: 6px; accent-color: #ff4081; cursor: pointer; }
 .aviso-auriculares {
     flex: 1 1 100%;
     margin: 0;

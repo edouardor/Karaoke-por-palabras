@@ -49,12 +49,19 @@ let pulsoCompasMarcado = 0;             // 1..N iluminado; 0 = ninguno (durante 
 let aciertosKaraoke = 0;
 let temporizadorKaraoke = null;
 let relojKaraoke = { t0: 0, tiempoBase: 0 };
+let velocidadKaraoke = 1;               // 1 = tempo de la partitura; solo afecta al karaoke
+let pendienteKaraoke = null;             // próximo aviso del reloj, para reprogramarlo al cambiar la velocidad
+let pasoCuentaKaraoke = null;            // paso de la cuenta atrás que está en curso
 let temporizadorEscucha = null;          // temporizador de la siguiente nota
 let relojEscucha = { t0: 0, tiempoBase: 0 }; // referencia para no acumular retraso
 let sonidoEscuchaActual = null;          // última nota sonando (para silenciarla al pausar)
+let sonidoAcordeActual = null;           // acorde de acompañamiento, independiente de la melodía
+let acompanamiento = [];                 // acordes que se oyen y no se cantan
+let temporizadoresAcompanamiento = [];
 let enSilencio = false;                  // true mientras se muestra "Aquí no cantamos"
 let intervaloSilencio = null;            // actualiza la cuenta atrás del silencio
 let cancionActual = "";                  // canción elegida (para pasar de escucha a entrenamiento)
+let piezaPendiente = "";                 // pieza abierta desde Calentamiento, fuera de la lista
 
 let bucleAudioActivo = false;            // evita arrancar varios bucles de audio a la vez
 
@@ -273,7 +280,8 @@ async function iniciarApp(modo = 'entrenamiento') {
         exigenciaUsada = etiquetaDificultad(toleranciaCentsConfigurada);
         modoSolicitado = modo;
 
-        const cancionSeleccionada = document.getElementById('selector-cancion').value.trim();
+        const cancionSeleccionada = (piezaPendiente || document.getElementById('selector-cancion').value).trim();
+        piezaPendiente = "";
         cancionActual = cancionSeleccionada;
         document.getElementById('botones-inicio').style.display = 'none';
         document.getElementById('zona-seleccion').style.display = 'none';
@@ -317,10 +325,12 @@ async function iniciarApp(modo = 'entrenamiento') {
         }
 
         let notasRaw = datosNotas.notes || datosNotas;
+        let pistaMelodia = null;
         if (datosNotas.tracks && Array.isArray(datosNotas.tracks)) {
-            const pista = datosNotas.tracks.find(t => t.notes && t.notes.length > 0);
-            if (pista) notasRaw = pista.notes;
+            pistaMelodia = datosNotas.tracks.find(t => t.notes && t.notes.length > 0) || null;
+            if (pistaMelodia) notasRaw = pistaMelodia.notes;
         }
+        acompanamiento = acordesDe(datosNotas, pistaMelodia);
 
         let tAcumulado = 0;
         let notasListaCompleta = notasRaw.map(n => {
@@ -663,10 +673,23 @@ function cargarNuevaFrasePalabra(sinGuia = false) {
     reiniciarAyudaNota();
 
     if (!sinGuia) {
-        inicioCantoMs = performance.now() + duracionGuiaMs(datosFrase);
+        const tNota = datosFrase.tiempos[0];
+        const anticipo = anticipoAntesDe(tNota, finMelodiaAntesDe(tNota));
+        inicioCantoMs = performance.now() + anticipo * 1000 + duracionGuiaMs(datosFrase);
         armarRelojNotaEntrenamiento(inicioCantoMs);
         idGuia++;
-        reproducirCadenaNotasGuia(datosFrase.notesIngles, datosFrase.duraciones, 0, idGuia, datosFrase.tiempos);
+        const idEstaGuia = idGuia;
+        reproduciendoGuia = true;
+        const reloj = { t0: performance.now(), tiempoBase: tNota - anticipo };
+        programarAcompanamiento(reloj, idEstaGuia, () => idEstaGuia === idGuia, finFrase(datosFrase));
+        if (anticipo > 0.02) {
+            setTimeout(() => {
+                if (idEstaGuia !== idGuia) return;
+                reproducirCadenaNotasGuia(datosFrase.notesIngles, datosFrase.duraciones, 0, idEstaGuia, datosFrase.tiempos);
+            }, anticipo * 1000);
+        } else {
+            reproducirCadenaNotasGuia(datosFrase.notesIngles, datosFrase.duraciones, 0, idEstaGuia, datosFrase.tiempos);
+        }
     }
 }
 
@@ -685,6 +708,9 @@ function cancelarTemporizadores() {
     temporizadorEscucha = null;
     clearTimeout(temporizadorKaraoke);
     temporizadorKaraoke = null;
+    pendienteKaraoke = null;
+    pasoCuentaKaraoke = null;
+    cancelarAcompanamiento();
     limpiarSilencioEscucha();
     silenciarSonidoEscucha();
     modoEscucha = false;
@@ -1292,6 +1318,43 @@ function ocultarResultadoMicrofono() {
     if (nivel) nivel.style.width = "0%";
 }
 
+function mostrarCalentamientos() {
+    ocultarResultadoMicrofono();
+    document.body.classList.add("vista-calentamiento");
+    document.getElementById("lista-calentamiento").hidden = false;
+}
+
+function cerrarCalentamientos() {
+    document.body.classList.remove("vista-calentamiento");
+    document.getElementById("lista-calentamiento").hidden = true;
+    document.getElementById("botones-inicio").style.display = "flex";
+}
+
+function volverACalentamientos() {
+    ocultarResultadoMicrofono();
+    cancelarTemporizadores();
+    document.getElementById("titulo-cancion").style.display = "none";
+    document.getElementById("controles-escucha").style.display = "none";
+    document.getElementById("controles-karaoke").style.display = "none";
+    document.getElementById("status-box").style.display = "none";
+    document.getElementById("evaluacion").innerHTML = "";
+    document.getElementById("secuencia-visual").innerHTML = "";
+    document.getElementById("palabra-pantalla").innerText = "...";
+    document.getElementById("zona-reinicio").style.display = "none";
+    document.getElementById("zona-seleccion").style.display = "block";
+    document.getElementById("botones-inicio").style.display = "none";
+    document.getElementById("btn-volver-calentamiento").hidden = true;
+    document.body.classList.add("vista-calentamiento");
+    document.getElementById("lista-calentamiento").hidden = false;
+}
+
+function empezarCalentamiento(numero) {
+    if (numero !== 1) return;
+    piezaPendiente = "Calentamiento 1";
+    document.getElementById("lista-calentamiento").hidden = true;
+    iniciarApp("karaoke");
+}
+
 async function probarMicrofono() {
     const texto = document.getElementById("texto-micro");
     const caja = document.getElementById("resultado-micro");
@@ -1352,9 +1415,123 @@ function buclePruebaMicro(id) {
 // Suena la canción entera, palabra tras palabra, con el ritmo real del MIDI
 // (incluidos los silencios) y sin parar al final de cada palabra.
 
+// Pistas posteriores a la melodía: se oyen, pero no se asignan a sílabas.
+function acordesDe(datosNotas, pistaMelodia) {
+    const sueltos = [];
+    const pistas = (datosNotas.tracks || []).filter(t => t !== pistaMelodia && t.notes && t.notes.length);
+    pistas.forEach(pista => {
+        pista.notes.forEach(n => {
+            const nombre = n.name || n.note;
+            if (!nombre || typeof n.time !== "number") return;
+            sueltos.push({ time: n.time, duracion: n.duration || 0.4, nombre });
+        });
+    });
+    sueltos.sort((a, b) => a.time - b.time);
+    const grupos = [];
+    sueltos.forEach(n => {
+        const ultimo = grupos[grupos.length - 1];
+        if (ultimo && Math.abs(ultimo.time - n.time) < 0.001) {
+            ultimo.notas.push(n.nombre);
+            ultimo.duracion = Math.max(ultimo.duracion, n.duracion);
+        } else {
+            grupos.push({ time: n.time, duracion: n.duracion, notas: [n.nombre] });
+        }
+    });
+    return grupos;
+}
+
+function finFrase(frase) {
+    const n = frase.tiempos.length - 1;
+    return frase.tiempos[n] + (frase.duraciones[n] || 0.4);
+}
+
+// Fin de la última nota cantada que empieza antes de este instante.
+function finMelodiaAntesDe(tiempo) {
+    let fin = 0;
+    for (const frase of FRASES_JUEGO) {
+        for (let i = 0; i < frase.tiempos.length; i++) {
+            if (frase.tiempos[i] >= tiempo - 0.001) return fin;
+            fin = Math.max(fin, frase.tiempos[i] + (frase.duraciones[i] || 0.4));
+        }
+    }
+    return fin;
+}
+
+// Segundos de acorde que hay que oír antes de la nota cantada.
+function anticipoAntesDe(tiempoNota, tiempoAnterior) {
+    let primero = null;
+    for (const acorde of acompanamiento) {
+        if (acorde.time < tiempoAnterior - 0.001) continue;
+        if (acorde.time >= tiempoNota - 0.001) break;
+        if (primero === null || acorde.time < primero) primero = acorde.time;
+    }
+    return primero === null ? 0 : tiempoNota - primero;
+}
+
+function cancelarAcompanamiento() {
+    temporizadoresAcompanamiento.forEach(t => clearTimeout(t));
+    temporizadoresAcompanamiento = [];
+}
+
+function programarAcompanamiento(reloj, idEjecucion, activo, hastaTiempo, velocidad) {
+    const ritmo = velocidad || 1;
+    cancelarAcompanamiento();
+    acompanamiento.forEach(acorde => {
+        if (acorde.time < reloj.tiempoBase - 0.001) return;
+        if (hastaTiempo != null && acorde.time >= hastaTiempo - 0.001) return;
+        const espera = esperaMsHasta(reloj, acorde.time, ritmo);
+        const timer = setTimeout(() => {
+            if (idEjecucion !== idGuia || !activo()) return;
+            sonarAcorde(acorde.notas, acorde.duracion / ritmo);
+        }, espera);
+        temporizadoresAcompanamiento.push(timer);
+    });
+}
+
+function esperaMsHasta(reloj, tiempoObjetivo, velocidad) {
+    const ritmo = velocidad || 1;
+    const avanzado = (performance.now() - reloj.t0) / 1000 * ritmo;
+    return Math.max(0, (tiempoObjetivo - reloj.tiempoBase - avanzado) / ritmo * 1000);
+}
+
+function textoVelocidad(valor) {
+    return "×" + valor.toLocaleString("es", { maximumFractionDigits: 2 });
+}
+
+function cambiarVelocidadKaraoke(valor) {
+    const nueva = Math.min(2, Math.max(0.5, Number(valor) || 1));
+    const anterior = velocidadKaraoke;
+    const etiqueta = document.getElementById("txt-velocidad");
+    const control = document.getElementById("velocidad-karaoke");
+    if (etiqueta) etiqueta.textContent = textoVelocidad(nueva);
+    if (control && Number(control.value) !== nueva) control.value = String(nueva);
+
+    if (modoKaraoke && estadoKaraoke === "reproduciendo" && anterior > 0) {
+        const tiempo = relojKaraoke.tiempoBase + (performance.now() - relojKaraoke.t0) / 1000 * anterior;
+        velocidadKaraoke = nueva;
+        relojKaraoke = { t0: performance.now(), tiempoBase: tiempo };
+        if (pendienteKaraoke && pendienteKaraoke.idEjecucion === idGuia) {
+            programarKaraoke(pendienteKaraoke.tiempoObjetivo, pendienteKaraoke.accion, pendienteKaraoke.idEjecucion);
+        }
+        programarAcompanamiento(relojKaraoke, idGuia, () => modoKaraoke && estadoKaraoke === "reproduciendo", null, nueva);
+        actualizarLucesCompas();
+        return;
+    }
+    if (modoKaraoke && estadoKaraoke === "cuenta" && pasoCuentaKaraoke && anterior > 0) {
+        const hecho = performance.now() - pasoCuentaKaraoke.inicioMs;
+        const queda = Math.max(0, pasoCuentaKaraoke.esperaMs - hecho) * (anterior / nueva);
+        const paso = pasoCuentaKaraoke;
+        velocidadKaraoke = nueva;
+        clearTimeout(temporizadorKaraoke);
+        programarPasoCuenta(queda, paso.accion, paso.idEjecucion);
+        return;
+    }
+    velocidadKaraoke = nueva;
+}
+
 function sonarNota(nombreNotaIngles, duracion) {
     asegurarAudioContext();
-    silenciarSonidoEscucha();
+    silenciarMelodia();
     const dur = Math.max(duracion || 0.4, 0.12);
     const ahora = audioContext.currentTime;
 
@@ -1393,18 +1570,66 @@ function sonarNota(nombreNotaIngles, duracion) {
     sonidoEscuchaActual = { ganancia, osciladores };
 }
 
-// Apaga con un fundido corto la nota que esté sonando (al pausar o salir)
-function silenciarSonidoEscucha() {
-    if (!sonidoEscuchaActual || !audioContext) return;
-    const { ganancia, osciladores } = sonidoEscuchaActual;
-    sonidoEscuchaActual = null;
+function sonarAcorde(nombres, duracion) {
+    asegurarAudioContext();
+    silenciarAcorde();
+    const dur = Math.max(duracion || 0.4, 0.12);
+    const ahora = audioContext.currentTime;
+    const ganancia = audioContext.createGain();
+    const osciladores = [];
+    nombres.forEach(nombre => {
+        let letra = nombre.replace(/[0-9]/g, "").trim().toUpperCase();
+        const octava = parseInt(nombre.replace(/[^0-9]/g, "")) || 4;
+        if (letra === "DB") letra = "C#";
+        if (letra === "EB") letra = "D#";
+        if (letra === "GB") letra = "F#";
+        if (letra === "AB") letra = "G#";
+        if (letra === "BB") letra = "A#";
+        const frecuencia = (FRECUENCIAS_BASE_OCTAVA_0[letra] || 18.35) * Math.pow(2, octava);
+        const osc = audioContext.createOscillator();
+        const parcial = audioContext.createGain();
+        osc.type = "sine";
+        osc.frequency.value = frecuencia;
+        parcial.gain.value = 0.55;
+        osc.connect(parcial);
+        parcial.connect(ganancia);
+        osc.start();
+        osc.stop(ahora + dur);
+        osciladores.push(osc);
+    });
+    const nivel = nombres.length > 1 ? 0.16 : 0.22;
+    ganancia.gain.setValueAtTime(nivel, ahora);
+    ganancia.gain.setValueAtTime(nivel, ahora + Math.max(0, dur - 0.08));
+    ganancia.gain.exponentialRampToValueAtTime(0.0001, ahora + dur);
+    ganancia.connect(audioContext.destination);
+    sonidoAcordeActual = { ganancia, osciladores };
+}
+
+function apagarVoz(voz) {
+    if (!voz || !audioContext) return;
     try {
         const ahora = audioContext.currentTime;
-        ganancia.gain.cancelScheduledValues(ahora);
-        ganancia.gain.setValueAtTime(Math.max(ganancia.gain.value, 0.0001), ahora);
-        ganancia.gain.exponentialRampToValueAtTime(0.0001, ahora + 0.06);
-        osciladores.forEach(o => o.stop(ahora + 0.07));
+        voz.ganancia.gain.cancelScheduledValues(ahora);
+        voz.ganancia.gain.setValueAtTime(Math.max(voz.ganancia.gain.value, 0.0001), ahora);
+        voz.ganancia.gain.exponentialRampToValueAtTime(0.0001, ahora + 0.06);
+        voz.osciladores.forEach(o => o.stop(ahora + 0.07));
     } catch (e) { /* la nota ya había terminado */ }
+}
+
+function silenciarMelodia() {
+    apagarVoz(sonidoEscuchaActual);
+    sonidoEscuchaActual = null;
+}
+
+function silenciarAcorde() {
+    apagarVoz(sonidoAcordeActual);
+    sonidoAcordeActual = null;
+}
+
+// Apaga con un fundido corto lo que esté sonando (al pausar o salir)
+function silenciarSonidoEscucha() {
+    silenciarMelodia();
+    silenciarAcorde();
 }
 
 function actualizarControlesEscucha() {
@@ -1435,9 +1660,10 @@ function iniciarEscuchaDesde(indicePalabra) {
     document.getElementById('zona-reinicio').style.display = 'none';
     actualizarControlesEscucha();
 
-    relojEscucha = { t0: performance.now(), tiempoBase: FRASES_JUEGO[indicePalabra].tiempos[0] };
+    relojEscucha = relojConAnticipo(FRASES_JUEGO[indicePalabra].tiempos[0]);
     idGuia++;
     actualizarLucesCompas();
+    programarAcompanamiento(relojEscucha, idGuia, () => modoEscucha && estadoEscucha === "reproduciendo");
     reproducirPalabraEscucha(idGuia);
 }
 
@@ -1452,7 +1678,7 @@ function reproducirPalabraEscucha(idEjecucion) {
     }
 
     cargarNuevaFrasePalabra(true);          // dibuja la palabra sin lanzar la guía del entrenamiento
-    tocarNotaEscucha(0, idEjecucion);
+    programarEscucha(FRASES_JUEGO[fraseActualIndex].tiempos[0], () => tocarNotaEscucha(0, idEjecucion), idEjecucion);
 }
 
 // Programa una acción para un instante de la canción (en segundos del MIDI).
@@ -1534,6 +1760,7 @@ function pausarEscucha() {
     clearTimeout(temporizadorEscucha);
     temporizadorEscucha = null;
     idGuia++;                               // anula lo que quedara programado
+    cancelarAcompanamiento();
     limpiarSilencioEscucha();
     silenciarSonidoEscucha();
     pulsoCompasMarcado = pulsoDeTiempo(relojEscucha.tiempoBase + (performance.now() - relojEscucha.t0) / 1000);
@@ -1544,6 +1771,8 @@ function pausarEscucha() {
 }
 
 function terminarEscucha() {
+    cancelarAcompanamiento();
+    silenciarSonidoEscucha();
     limpiarSilencioEscucha();
     estadoEscucha = 'fin';
     fraseActualIndex = 0;                   // "volver a escuchar" y "entrenar" parten del principio
@@ -1630,7 +1859,7 @@ function construirLineaKaraoke() {
 
 // Misma cuenta de cents que el entrenamiento, para que la tolerancia se sienta igual.
 // El margen del menú se aplica sobre esta distancia real: no se sustituye por un tope fijo.
-function centsRespectoANota(frecuencia, notaIngles) {
+function centsRespectoANota(frecuencia, notaIngles, ignorarOctava) {
     const valorMidiUsuario = 69 + 12 * Math.log2(frecuencia / 440);
     let letra = notaIngles.replace(/[0-9]/g, '').trim().toUpperCase();
     const octava = parseInt(notaIngles.replace(/[^0-9]/g, '')) || 4;
@@ -1638,7 +1867,9 @@ function centsRespectoANota(frecuencia, notaIngles) {
     if (bemoles[letra]) letra = bemoles[letra];
     const hzObjetivo = (FRECUENCIAS_BASE_OCTAVA_0[letra] || 18.35) * Math.pow(2, octava);
     const midiObjetivo = 69 + 12 * Math.log2(hzObjetivo / 440);
-    return (valorMidiUsuario - midiObjetivo) * 100;
+    let cents = (valorMidiUsuario - midiObjetivo) * 100;
+    if (ignorarOctava) cents -= Math.round(cents / 1200) * 1200;
+    return cents;
 }
 
 function comentarioKaraoke(porcentaje) {
@@ -1660,7 +1891,7 @@ function actualizarLucesCompas() {
     if (!caja) return;
     const enKaraoke = modoKaraoke && estadoKaraoke !== 'fin';
     const enEscucha = modoEscucha && estadoEscucha !== 'fin';
-    if (!enKaraoke && !enEscucha) {
+    if (esCalentamiento(cancionActual) || (!enKaraoke && !enEscucha)) {
         caja.hidden = true;
         return;
     }
@@ -1674,7 +1905,7 @@ function actualizarLucesCompas() {
         }
     }
     if (modoKaraoke && estadoKaraoke === 'reproduciendo') {
-        const tiempo = relojKaraoke.tiempoBase + (performance.now() - relojKaraoke.t0) / 1000;
+        const tiempo = relojKaraoke.tiempoBase + (performance.now() - relojKaraoke.t0) / 1000 * velocidadKaraoke;
         pulsoCompasMarcado = pulsoDeTiempo(tiempo);
     } else if (modoEscucha && estadoEscucha === 'reproduciendo') {
         const tiempo = relojEscucha.tiempoBase + (performance.now() - relojEscucha.t0) / 1000;
@@ -1707,12 +1938,12 @@ function actualizarControlesKaraoke() {
 }
 
 function programarKaraoke(tiempoObjetivo, accion, idEjecucion) {
-    const transcurridoMs = performance.now() - relojKaraoke.t0;
-    const esperaMs = Math.max(0, (tiempoObjetivo - relojKaraoke.tiempoBase) * 1000 - transcurridoMs);
+    clearTimeout(temporizadorKaraoke);
+    pendienteKaraoke = { tiempoObjetivo, accion, idEjecucion };
     temporizadorKaraoke = setTimeout(() => {
         if (!modoKaraoke || idEjecucion !== idGuia || estadoKaraoke !== 'reproduciendo') return;
         accion();
-    }, esperaMs);
+    }, esperaMsHasta(relojKaraoke, tiempoObjetivo, velocidadKaraoke));
 }
 
 function mostrarPalabraKaraoke(indice) {
@@ -1754,14 +1985,14 @@ function juzgarNotaKaraoke(nota) {
 function mostrarSilencioKaraoke(tiempoSiguiente, siguienteNota) {
     enSilencio = true;
     notaEnJuicio = null;
-    const finMs = relojKaraoke.t0 + (tiempoSiguiente - relojKaraoke.tiempoBase) * 1000;
     const pantalla = document.getElementById('palabra-pantalla');
     pantalla.className = "palabra-actual silencio";
     pantalla.innerText = "🤫 Aquí no cantamos";
     const palabra = FRASES_JUEGO[siguienteNota.palabraIndex].palabra
         .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const dibujar = () => {
-        const restante = Math.max(1, Math.ceil((finMs - performance.now()) / 1000));
+        const quedaMs = esperaMsHasta(relojKaraoke, tiempoSiguiente, velocidadKaraoke);
+        const restante = Math.max(1, Math.ceil(quedaMs / 1000));
         document.getElementById('secuencia-visual').innerHTML =
             `<div style="font-size:18px; color:#aaa;">Seguimos con «${palabra}» en ${restante} s</div>`;
     };
@@ -1787,7 +2018,7 @@ function emitirNotaKaraoke(idEjecucion) {
     framesDesafinadosKaraoke = 0;
     ultimaNotaValidadaTexto = "";
     destacarNotaKaraoke(nota);
-    sonarNota(nota.ingles, nota.duracion);
+    sonarNota(nota.ingles, nota.duracion / velocidadKaraoke);
     actualizarMarcadorKaraoke();
 
     const siguiente = notasLineaKaraoke[indiceNotaKaraoke + 1];
@@ -1847,10 +2078,17 @@ function mostrarCuentaKaraoke(texto, detalle) {
 }
 
 function programarPasoCuenta(esperaMs, accion, idEjecucion) {
+    clearTimeout(temporizadorKaraoke);
+    pasoCuentaKaraoke = { inicioMs: performance.now(), esperaMs, accion, idEjecucion };
     temporizadorKaraoke = setTimeout(() => {
+        if (pasoCuentaKaraoke && pasoCuentaKaraoke.idEjecucion === idEjecucion) pasoCuentaKaraoke = null;
         if (!modoKaraoke || idEjecucion !== idGuia || estadoKaraoke !== "cuenta") return;
         accion();
     }, esperaMs);
+}
+
+function esCalentamiento(nombre) {
+    return /^Calentamiento\b/.test(nombre || "");
 }
 
 // Primero suena la nota con la que empieza la canción. Luego un compás de cuenta atrás.
@@ -1868,31 +2106,51 @@ function prepararEntradaKaraoke(idEjecucion) {
     mostrarPalabraKaraoke(nota.palabraIndex);
     const nombre = nombreEspanolDesdeMidi(midiDesdeNombreIngles(nota.ingles));
     mostrarCuentaKaraoke(nombre, "Tono");
-    sonarNota(nota.ingles, Math.max(1, segundosPorPulso * 2));
+    const duracionTono = Math.max(1, segundosPorPulso * 2) / velocidadKaraoke;
+    sonarNota(nota.ingles, duracionTono);
     actualizarControlesKaraoke();
-    programarPasoCuenta(Math.max(1000, segundosPorPulso * 2000), () => {
+    programarPasoCuenta(Math.max(1000, segundosPorPulso * 2000) / velocidadKaraoke, () => {
         silenciarSonidoEscucha();
         pulsarCuentaKaraoke(idEjecucion, pulsosPorCompas);
     }, idEjecucion);
 }
 
+function relojConAnticipo(tiempoNota) {
+    const anticipo = anticipoAntesDe(tiempoNota, finMelodiaAntesDe(tiempoNota));
+    return { t0: performance.now(), tiempoBase: tiempoNota - anticipo };
+}
+
+function comenzarReproduccionKaraoke(idEjecucion) {
+    const nota = notasLineaKaraoke[indiceNotaKaraoke];
+    if (!nota) {
+        terminarKaraoke();
+        return;
+    }
+    relojKaraoke = relojConAnticipo(nota.tiempo);
+    estadoKaraoke = "reproduciendo";
+    palabraMostradaIndex = -1;
+    actualizarControlesKaraoke();
+    actualizarLucesCompas();
+    programarAcompanamiento(relojKaraoke, idEjecucion, () => modoKaraoke && estadoKaraoke === "reproduciendo", null, velocidadKaraoke);
+    if (nota.tiempo - relojKaraoke.tiempoBase > 0.02) {
+        mostrarPalabraKaraoke(nota.palabraIndex);
+        programarKaraoke(nota.tiempo, () => emitirNotaKaraoke(idEjecucion), idEjecucion);
+    } else {
+        emitirNotaKaraoke(idEjecucion);
+    }
+}
+
 function pulsarCuentaKaraoke(idEjecucion, numero) {
     if (!modoKaraoke || idEjecucion !== idGuia || estadoKaraoke !== "cuenta") return;
     if (numero < 1) {
-        estadoKaraoke = "reproduciendo";
-        const primera = notasLineaKaraoke[indiceNotaKaraoke];
-        relojKaraoke = { t0: performance.now(), tiempoBase: primera.tiempo };
-        palabraMostradaIndex = -1;
-        actualizarControlesKaraoke();
-        actualizarLucesCompas();
-        emitirNotaKaraoke(idEjecucion);
+        comenzarReproduccionKaraoke(idEjecucion);
         return;
     }
     mostrarCuentaKaraoke(String(numero), "");
     pulsoCompasMarcado = pulsosPorCompas - numero + 1;
     actualizarLucesCompas();
     clicDeCompas(numero === pulsosPorCompas);
-    programarPasoCuenta(segundosPorPulso * 1000, () => pulsarCuentaKaraoke(idEjecucion, numero - 1), idEjecucion);
+    programarPasoCuenta(segundosPorPulso * 1000 / velocidadKaraoke, () => pulsarCuentaKaraoke(idEjecucion, numero - 1), idEjecucion);
 }
 
 function iniciarKaraokeDesde(indicePalabra) {
@@ -1918,6 +2176,11 @@ function iniciarKaraokeDesde(indicePalabra) {
     relojKaraoke = { t0: performance.now(), tiempoBase: primera.tiempo };
     palabraMostradaIndex = -1;             // obliga a dibujar la primera palabra
     idGuia++;
+    document.getElementById("btn-volver-calentamiento").hidden = true;
+    if (esCalentamiento(cancionActual)) {
+        comenzarReproduccionKaraoke(idGuia);
+        return;
+    }
     prepararEntradaKaraoke(idGuia);
 }
 
@@ -1927,6 +2190,7 @@ function pausarKaraoke() {
     clearTimeout(temporizadorKaraoke);
     temporizadorKaraoke = null;
     idGuia++;
+    cancelarAcompanamiento();
     silenciarSonidoEscucha();
     const seguiaUnSilencio = enSilencio;
     limpiarSilencioEscucha();
@@ -1945,22 +2209,20 @@ function seguirKaraoke() {
         terminarKaraoke();
         return;
     }
-    relojKaraoke = { t0: performance.now(), tiempoBase: nota.tiempo };
     idGuia++;
     if (cuentaKaraokePendiente) {
         cuentaKaraokePendiente = false;
         prepararEntradaKaraoke(idGuia);
         return;
     }
-    estadoKaraoke = 'reproduciendo';
-    actualizarControlesKaraoke();
-    emitirNotaKaraoke(idGuia);
+    comenzarReproduccionKaraoke(idGuia);
 }
 
 function terminarKaraoke() {
     if (estadoKaraoke === 'fin') return;
     clearTimeout(temporizadorKaraoke);
     temporizadorKaraoke = null;
+    cancelarAcompanamiento();
     limpiarSilencioEscucha();
     silenciarSonidoEscucha();
     notaEnJuicio = null;
@@ -1995,6 +2257,7 @@ function terminarKaraoke() {
     document.getElementById('secuencia-visual').appendChild(resumen);
     document.getElementById('evaluacion').innerHTML = `<span class="success">Promedio: ${promedio}%</span>`;
     document.getElementById('zona-reinicio').style.display = 'flex';
+    document.getElementById('btn-volver-calentamiento').hidden = !esCalentamiento(cancionActual);
     actualizarFlechas();
     actualizarControlesKaraoke();
 }
@@ -2003,11 +2266,12 @@ function procesarKaraoke() {
     if (estadoKaraoke !== 'reproduciendo' || !notaEnJuicio || notaEnJuicio.juzgada || !analyser) return;
 
     const nota = notaEnJuicio;
+    const ignorarOctava = esCalentamiento(cancionActual);
     analyser.getFloatTimeDomainData(dataArray);
     const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
     const caja = document.getElementById(`caja-nota-${nota.notaIndex}`);
 
-    if (frecuencia === -1 || frecuencia <= 60 || frecuencia >= 1000) {
+    if (frecuencia === -1 || frecuencia <= (ignorarOctava ? 50 : 60) || frecuencia >= (ignorarOctava ? 2000 : 1000)) {
         framesDesafinadosKaraoke = 0;
         if (caja && !nota.acertada) {
             caja.className = "nota-caja activa";
@@ -2019,7 +2283,7 @@ function procesarKaraoke() {
     }
 
     const margen = aplicarToleranciaDelMenu();
-    const cents = centsRespectoANota(frecuencia, nota.ingles);
+    const cents = centsRespectoANota(frecuencia, nota.ingles, ignorarOctava);
     const absDesviacion = Math.abs(cents);
 
     if (absDesviacion <= margen) {
@@ -2059,4 +2323,6 @@ function regresarAlMenu() {
     
     document.getElementById('zona-seleccion').style.display = "block";
     document.getElementById('botones-inicio').style.display = "flex";
+    document.getElementById("btn-volver-calentamiento").hidden = true;
+    cerrarCalentamientos();
 }
