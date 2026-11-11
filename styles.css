@@ -160,6 +160,7 @@
     background: rgba(0,176,255,0.15);
     border-color: #00b0ff;
 }
+#btn-volver-calentamiento { margin-left: auto; }
 #zona-seleccion > .barra-superior { display: none; margin-bottom: 8px; }
 body.vista-calentamiento #zona-seleccion > .barra-superior { display: flex; }
 body.vista-calentamiento #btn-probar-micro,

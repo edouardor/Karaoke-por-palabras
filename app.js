@@ -30,6 +30,10 @@ let notaCantadaAyuda = null;
 const GUIA_PROPORCION_SOSTENIDO = 0.85;  // cada nota suena al menos el 85 % del tiempo hasta la siguiente...
 const GUIA_SOSTENIDO_MAXIMO = 0.6;       // ...pero sin alargarla más de 0,6 s por encima de su duración original
 const GUIA_DURACION_MINIMA_ULTIMA = 0.35; // y la última nota de cada palabra suena al menos 0,35 s
+// La celda suena con dos senos a 0,35. La melodía reparte eso en parciales
+// (0,40 + 0,10 + 0,08): 1,15 deja la palabra al mismo volumen que la celda.
+const VOLUMEN_MELODIA = 0.30;             // karaoke, más bajo para no volver al micrófono
+const VOLUMEN_MELODIA_GUIA = 1.15;        // entrenamiento y escucha
 
 const UMBRAL_SILENCIO_ESCUCHA = 3;       // segundos: a partir de aquí se avisa "Aquí no cantamos"
 let modoEscucha = false;                 // true mientras se está en el modo escucha
@@ -612,7 +616,7 @@ function cargarNuevaFrasePalabra(sinGuia = false) {
             if (modoEscucha) {
                 if (estadoEscucha === 'pausada') {
                     silenciarSonidoEscucha();
-                    sonarNota(notaIngles, Math.max(duracionNota, 0.4));
+                    sonarNota(notaIngles, Math.max(duracionNota, 0.4), VOLUMEN_MELODIA_GUIA);
                 }
                 return;
             }
@@ -789,7 +793,7 @@ function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota, idEj
         const hastaSiguiente = listaTiempos[indiceNota + 1] - listaTiempos[indiceNota];
         sonido = Math.max(duracionOriginal, Math.min(GUIA_PROPORCION_SOSTENIDO * hastaSiguiente, GUIA_SOSTENIDO_MAXIMO));
     }
-    sonarNota(listaNotas[indiceNota], sonido);
+    sonarNota(listaNotas[indiceNota], sonido, VOLUMEN_MELODIA_GUIA);
 
     // La siguiente nota empieza cuando le toca según el MIDI (no cuando acaba ésta):
     // así se conservan el ritmo y los silencios. Se mide desde el inicio para no acumular retraso.
@@ -1349,7 +1353,7 @@ function volverACalentamientos() {
 }
 
 function empezarCalentamiento(numero) {
-    if (numero !== 1 && numero !== 2) return;
+    if (numero < 1 || numero > 5) return;
     piezaPendiente = "Calentamiento " + numero;
     document.getElementById("lista-calentamiento").hidden = true;
     iniciarApp("karaoke");
@@ -1529,11 +1533,12 @@ function cambiarVelocidadKaraoke(valor) {
     velocidadKaraoke = nueva;
 }
 
-function sonarNota(nombreNotaIngles, duracion) {
+function sonarNota(nombreNotaIngles, duracion, volumen) {
     asegurarAudioContext();
     silenciarMelodia();
     const dur = Math.max(duracion || 0.4, 0.12);
     const ahora = audioContext.currentTime;
+    const nivel = (typeof volumen === "number") ? volumen : VOLUMEN_MELODIA;
 
     let letra = nombreNotaIngles.replace(/[0-9]/g, '').trim().toUpperCase();
     const octava = parseInt(nombreNotaIngles.replace(/[^0-9]/g, '')) || 4;
@@ -1562,8 +1567,8 @@ function sonarNota(nombreNotaIngles, duracion) {
         return osc;
     });
 
-    ganancia.gain.setValueAtTime(0.30, ahora);
-    ganancia.gain.setValueAtTime(0.30, ahora + Math.max(0, dur - 0.08));
+    ganancia.gain.setValueAtTime(nivel, ahora);
+    ganancia.gain.setValueAtTime(nivel, ahora + Math.max(0, dur - 0.08));
     ganancia.gain.exponentialRampToValueAtTime(0.0001, ahora + dur);
     ganancia.connect(audioContext.destination);
 
@@ -1701,7 +1706,7 @@ function tocarNotaEscucha(i, idEjecucion) {
         const caja = document.getElementById(`caja-nota-${k}`);
         if (caja) caja.className = (k === i) ? "nota-caja activa" : "nota-caja";
     }
-    sonarNota(palabra.notesIngles[i], palabra.duraciones[i]);
+    sonarNota(palabra.notesIngles[i], palabra.duraciones[i], VOLUMEN_MELODIA_GUIA);
 
     // ¿Cuándo empieza la siguiente nota? (en esta palabra o en la que viene)
     const esUltimaDePalabra = (i + 1 >= palabra.notes.length);
@@ -1921,7 +1926,7 @@ function actualizarMarcadorKaraoke() {
     const van = Math.min(indiceNotaKaraoke + 1, total);
     const margen = aplicarToleranciaDelMenu();
     document.getElementById('evaluacion').innerText =
-        `🎤 ${etiquetaDificultad(margen)} · ±${margen} cents · ${aciertosKaraoke} aciertos · nota ${van} de ${total}`;
+        `🎤 ${etiquetaDificultad(margen)} · ${aciertosKaraoke} aciertos · nota ${van} de ${total}`;
 }
 
 function actualizarControlesKaraoke() {
@@ -1934,7 +1939,10 @@ function actualizarControlesKaraoke() {
     document.getElementById('btn-seguir-karaoke').style.display = estadoKaraoke === 'pausada' ? 'inline-block' : 'none';
     document.getElementById('btn-repetir-karaoke').style.display = estadoKaraoke === 'fin' ? 'inline-block' : 'none';
     if (estadoKaraoke === 'reproduciendo') actualizarMarcadorKaraoke();
-    if (estadoKaraoke === 'pausada') document.getElementById('evaluacion').innerText = "⏸ Karaoke en pausa";
+    if (estadoKaraoke === 'pausada') {
+        const pieza = esCalentamiento(cancionActual) ? "Calentamiento" : "Karaoke";
+        document.getElementById('evaluacion').innerText = `⏸ ${pieza} en pausa`;
+    }
 }
 
 function programarKaraoke(tiempoObjetivo, accion, idEjecucion) {
@@ -2176,7 +2184,7 @@ function iniciarKaraokeDesde(indicePalabra) {
     relojKaraoke = { t0: performance.now(), tiempoBase: primera.tiempo };
     palabraMostradaIndex = -1;             // obliga a dibujar la primera palabra
     idGuia++;
-    document.getElementById("btn-volver-calentamiento").hidden = true;
+    document.getElementById("btn-volver-calentamiento").hidden = !esCalentamiento(cancionActual);
     if (esCalentamiento(cancionActual)) {
         comenzarReproduccionKaraoke(idGuia);
         return;
