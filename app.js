@@ -5,6 +5,29 @@ let notaSecuenciaIndex = 0;
 let muestrasConsecutivasBien = 0;
 const MUESTRAS_NECESARIAS = 3; 
 let reproduciendoGuia = false;
+
+// En el móvil, con el micrófono abierto el sistema baja el altavoz (modo llamada).
+// Mientras suena la guía se corta la pista, para que el piano suene como en escucha.
+function fijarSesionAudio(tipo) {
+    if (!navigator.audioSession) return;
+    try { navigator.audioSession.type = tipo; } catch (e) { /* Safari antiguo */ }
+}
+
+function sincronizarAltavozConMicrofono() {
+    const pista = streamMicrofono && streamMicrofono.getAudioTracks()[0];
+    if (!pista) {
+        fijarSesionAudio("playback");
+        return;
+    }
+    const cortarParaGuia = esTelefono() && reproduciendoGuia;
+    pista.enabled = !cortarParaGuia;
+    fijarSesionAudio(cortarParaGuia ? "playback" : "play-and-record");
+}
+
+function ponerGuiaSonando(activa) {
+    reproduciendoGuia = !!activa;
+    sincronizarAltavozConMicrofono();
+}
 let ultimaNotaValidadaTexto = "";
 let toleranciaCentsConfigurada = 60; 
 let palabraMostradaIndex = 0;            // palabra que se ve en pantalla (para las flechas)
@@ -692,7 +715,7 @@ function cargarNuevaFrasePalabra(sinGuia = false) {
         armarRelojNotaEntrenamiento(inicioCantoMs);
         idGuia++;
         const idEstaGuia = idGuia;
-        reproduciendoGuia = true;
+        ponerGuiaSonando(true);
         const reloj = { t0: performance.now(), tiempoBase: tNota - anticipo };
         programarAcompanamiento(reloj, idEstaGuia, () => idEstaGuia === idGuia, finFrase(datosFrase));
         if (anticipo > 0.02) {
@@ -713,7 +736,7 @@ function cancelarTemporizadores() {
     clearTimeout(temporizadorSiguientePalabra);
     temporizadorSiguientePalabra = null;
     idGuia++;                 // invalida la guía que esté sonando
-    reproduciendoGuia = false;
+    ponerGuiaSonando(false);
     modoCalibracion = false;
     muestrasCalibracion = [];
     esperandoSiguientePalabra = false;
@@ -775,13 +798,13 @@ document.addEventListener('keydown', (e) => {
 function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota, idEjecucion, listaTiempos, inicioMs) {
     if (idEjecucion !== idGuia) return; // se navegó a otra palabra: esta guía ya no vale
     if (indiceNota >= listaNotas.length) {
-        setTimeout(() => { 
-            if (idEjecucion === idGuia) reproduciendoGuia = false; 
+        setTimeout(() => {
+            if (idEjecucion === idGuia) ponerGuiaSonando(false);
         }, 300);
         return;
     }
 
-    reproduciendoGuia = true;
+    ponerGuiaSonando(true);
 
     // Si no hay instantes de inicio, se encadenan las duraciones
     if (!listaTiempos) {
@@ -815,7 +838,7 @@ function reproducirCadenaNotasGuia(listaNotas, listaDuraciones, indiceNota, idEj
 }
 
 function tocarNotaIndividualUsuario(nombreNotaIngles, elementoCaja, idxSilaba, idxPalabra) {
-    reproduciendoGuia = true;
+    ponerGuiaSonando(true);
     const idLocal = ++idGuia; // si se navega o se sale al menú, este temporizador queda anulado
     elementoCaja.className = "nota-caja activa";
 
@@ -823,7 +846,7 @@ function tocarNotaIndividualUsuario(nombreNotaIngles, elementoCaja, idxSilaba, i
 
     setTimeout(() => {
         if (idLocal !== idGuia) return;
-        reproduciendoGuia = false;
+        ponerGuiaSonando(false);
         // Tras oír la sílaba, hay que cantar la palabra desde ella
         reiniciarDesdeSilaba(idxSilaba, idxPalabra);
     }, 1000);
@@ -915,7 +938,7 @@ function recordarNotaCantada(frecuencia, desviacionCents, notaObjetivoIngles) {
 
 function explicarNotaAtascada(notaObjetivoIngles) {
     if (!notaCantadaAyuda) return;
-    reproduciendoGuia = true;
+    ponerGuiaSonando(true);
     const idLocal = ++idGuia;
     const cantada = notaCantadaAyuda;
     const comparacion = cantada.objetivoMasAgudo ? "más aguda" : "más grave";
@@ -928,7 +951,7 @@ function explicarNotaAtascada(notaObjetivoIngles) {
     }, 1000);
     setTimeout(() => {
         if (idLocal !== idGuia) return;
-        reproduciendoGuia = false;
+        ponerGuiaSonando(false);
     }, 3000);
 }
 // Igual que en karaoke: la nota ocupa su duración (o hasta que empieza la siguiente).
@@ -1105,7 +1128,7 @@ function nombreEspanolDesdeMidi(midi) {
 function iniciarCalibracion() {
     modoCalibracion = true;
     muestrasCalibracion = [];
-    reproduciendoGuia = false;
+    ponerGuiaSonando(false);
 
     document.getElementById('btn-anterior').style.visibility = 'hidden';
     document.getElementById('btn-siguiente').style.visibility = 'hidden';
@@ -1155,7 +1178,7 @@ function procesarCalibracion() {
     // Nota válida: transponer la canción y empezar
     modoCalibracion = false;
     muestrasCalibracion = [];
-    reproduciendoGuia = true; // pausa la evaluación hasta que arranque la primera palabra
+    ponerGuiaSonando(true); // pausa la evaluación hasta que arranque la primera palabra
     transponerCancionAPrimeraNota(notaMidi);
     document.getElementById('secuencia-visual').innerHTML = "";
     mensaje.innerHTML = `<span class='success'>✔ Primera nota: ${nombre}. ¡Empezamos!</span>`;
@@ -1300,6 +1323,7 @@ function pedidosMicrofono(modo) {
 async function abrirStreamMicrofono(modo) {
     const pedidos = pedidosMicrofono(modo);
     const exigeSinEco = !(modo === "karaoke" && esTelefono());
+    if (esTelefono()) fijarSesionAudio("play-and-record");
     let ultimoError = null;
     let conEco = null;
     for (const audio of pedidos) {
@@ -1336,6 +1360,7 @@ function conectarMicrofono(stream, modo) {
     gananciaMicrofono.gain.value = nivelMicrofono(modo);
     source.connect(gananciaMicrofono);
     gananciaMicrofono.connect(analyser);
+    sincronizarAltavozConMicrofono();
 }
 
 function soltarMicrofono() {
@@ -1350,6 +1375,7 @@ function soltarMicrofono() {
     analyser = null;
     dataArray = null;
     gananciaMicrofono = null;
+    fijarSesionAudio("playback");
 }
 
 function microfonoEnMarcha() {
