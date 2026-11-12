@@ -406,6 +406,8 @@ async function iniciarApp(modo = 'entrenamiento') {
 
         if (FRASES_JUEGO.length === 0) throw new Error("No se encontraron palabras en la canción.");
 
+        await cargarPiano();
+
         // ----- MODO ESCUCHA SOLO: no hace falta micrófono -----
         if (modo === 'escucha') {
             asegurarAudioContext();
@@ -810,40 +812,7 @@ function tocarNotaIndividualUsuario(nombreNotaIngles, elementoCaja, idxSilaba, i
     const idLocal = ++idGuia; // si se navega o se sale al menú, este temporizador queda anulado
     elementoCaja.className = "nota-caja activa";
 
-    const oscBase = audioContext.createOscillator();
-    const oscHarm = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-
-    oscBase.type = 'sine';
-    oscHarm.type = 'sine';
-
-    let notaLetra = nombreNotaIngles.replace(/[0-9]/g, '').trim().toUpperCase();
-    let numeroOctava = parseInt(nombreNotaIngles.replace(/[^0-9]/g, '')) || 4;
-
-    if (notaLetra === "DB") notaLetra = "C#";
-    if (notaLetra === "EB") notaLetra = "D#";
-    if (notaLetra === "GB") notaLetra = "F#";
-    if (notaLetra === "AB") notaLetra = "G#";
-    if (notaLetra === "BB") notaLetra = "A#";
-
-    let hzBase = FRECUENCIAS_BASE_OCTAVA_0[notaLetra] || 18.35;
-    let frecuenciaCalculada = hzBase * Math.pow(2, numeroOctava);
-
-    oscBase.frequency.value = frecuenciaCalculada;
-    oscHarm.frequency.value = frecuenciaCalculada * 2;
-
-    gainNode.gain.setValueAtTime(0.35, audioContext.currentTime);
-    gainNode.gain.setValueAtTime(0.35, audioContext.currentTime + 0.85);
-    gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 1.0);
-
-    oscBase.connect(gainNode);
-    oscHarm.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-
-    oscBase.start();
-    oscHarm.start();
-    oscBase.stop(audioContext.currentTime + 1.0);
-    oscHarm.stop(audioContext.currentTime + 1.0);
+    sonarNota(nombreNotaIngles, 1, VOLUMEN_MELODIA_GUIA);
 
     setTimeout(() => {
         if (idLocal !== idGuia) return;
@@ -1221,6 +1190,77 @@ function asegurarAudioContext() {
     }
 }
 
+// Piano acústico (FluidR3), una muestra cada tres semitonos. El resto se afina con la velocidad de reproducción.
+const MIDIS_PIANO = Array.from({ length: 21 }, (_, i) => 24 + i * 3);
+const NOMBRES_MUESTRA_PIANO = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+const buffersPiano = new Map();
+let cargaPiano = null;
+const FACTOR_PIANO = 5;     // las muestras de piano pican hacia 0,1: así el ataque queda como el tono de antes
+
+function nombreMuestraPiano(midi) {
+    return NOMBRES_MUESTRA_PIANO[((midi % 12) + 12) % 12] + (Math.floor(midi / 12) - 1);
+}
+
+function muestraPianoCercana(midi) {
+    return MIDIS_PIANO.reduce((mejor, candidato) =>
+        Math.abs(candidato - midi) < Math.abs(mejor - midi) ? candidato : mejor
+    );
+}
+
+function cargarPiano() {
+    if (cargaPiano) return cargaPiano;
+    asegurarAudioContext();
+    cargaPiano = Promise.all(MIDIS_PIANO.map(async (midi) => {
+        try {
+            const respuesta = await fetch(`sonidos/piano/${nombreMuestraPiano(midi)}.mp3`);
+            if (!respuesta.ok) return;
+            const datos = await respuesta.arrayBuffer();
+            const audio = await audioContext.decodeAudioData(datos.slice(0));
+            buffersPiano.set(midi, audio);
+        } catch (e) { /* si falta una muestra, esa nota usa el tono de reserva */ }
+    }));
+    return cargaPiano;
+}
+
+function fuentePiano(ganancia, midi, cuandoFin) {
+    if (!buffersPiano.size) return null;
+    const base = muestraPianoCercana(midi);
+    const buffer = buffersPiano.get(base);
+    if (!buffer) return null;
+    const fuente = audioContext.createBufferSource();
+    fuente.buffer = buffer;
+    fuente.playbackRate.value = Math.pow(2, (midi - base) / 12);
+    fuente.connect(ganancia);
+    fuente.start();
+    fuente.stop(cuandoFin);
+    return fuente;
+}
+
+function tonoReserva(ganancia, frecuencia, cuandoFin) {
+    return [1, 0.35, 0.12].map((nivel, i) => {
+        const osc = audioContext.createOscillator();
+        const parcial = audioContext.createGain();
+        osc.type = "sine";
+        osc.frequency.value = frecuencia * (i + 1);
+        parcial.gain.value = nivel;
+        osc.connect(parcial);
+        parcial.connect(ganancia);
+        osc.start();
+        osc.stop(cuandoFin);
+        return osc;
+    });
+}
+
+function envolverNota(ganancia, nivel, ahora, dur) {
+    const fin = ahora + dur;
+    const cola = Math.min(0.04, dur * 0.3);
+    ganancia.gain.setValueAtTime(Math.max(nivel, 0.0001), ahora);
+    ganancia.gain.setValueAtTime(Math.max(nivel, 0.0001), ahora + Math.max(0, dur - cola));
+    ganancia.gain.exponentialRampToValueAtTime(0.0001, fin);
+    ganancia.connect(audioContext.destination);
+    return fin;
+}
+
 function esTelefono() {
     const ua = navigator.userAgent || "";
     if (/Android|iPhone|iPad|iPod/i.test(ua)) return true;
@@ -1538,41 +1578,13 @@ function sonarNota(nombreNotaIngles, duracion, volumen) {
     silenciarMelodia();
     const dur = Math.max(duracion || 0.4, 0.12);
     const ahora = audioContext.currentTime;
-    const nivel = (typeof volumen === "number") ? volumen : VOLUMEN_MELODIA;
-
-    let letra = nombreNotaIngles.replace(/[0-9]/g, '').trim().toUpperCase();
-    const octava = parseInt(nombreNotaIngles.replace(/[^0-9]/g, '')) || 4;
-    if (letra === "DB") letra = "C#";
-    if (letra === "EB") letra = "D#";
-    if (letra === "GB") letra = "F#";
-    if (letra === "AB") letra = "G#";
-    if (letra === "BB") letra = "A#";
-    const frecuencia = (FRECUENCIAS_BASE_OCTAVA_0[letra] || 18.35) * Math.pow(2, octava);
-
+    const nivel = ((typeof volumen === "number") ? volumen : VOLUMEN_MELODIA) * FACTOR_PIANO;
     const ganancia = audioContext.createGain();
-    // El fundamental manda. Si el armónico de la octava suena igual de fuerte,
-    // un altavoz pequeño lo destaca y la nota grave se oye una octava más alta.
-    // El tercer armónico, más flojo, evita esa confusión cuando el grave se pierde.
-    const niveles = [0.40, 0.10, 0.08];
-    const osciladores = niveles.map((nivel, i) => {
-        const osc = audioContext.createOscillator();
-        const parcial = audioContext.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = frecuencia * (i + 1);
-        parcial.gain.value = nivel;
-        osc.connect(parcial);
-        parcial.connect(ganancia);
-        osc.start();
-        osc.stop(ahora + dur);
-        return osc;
-    });
-
-    ganancia.gain.setValueAtTime(nivel, ahora);
-    ganancia.gain.setValueAtTime(nivel, ahora + Math.max(0, dur - 0.08));
-    ganancia.gain.exponentialRampToValueAtTime(0.0001, ahora + dur);
-    ganancia.connect(audioContext.destination);
-
-    sonidoEscuchaActual = { ganancia, osciladores };
+    const fin = envolverNota(ganancia, nivel, ahora, dur);
+    const midi = midiDesdeNombreIngles(nombreNotaIngles);
+    const piano = fuentePiano(ganancia, midi, fin + 0.05);
+    const fuentes = piano ? [piano] : tonoReserva(ganancia, 440 * Math.pow(2, (midi - 69) / 12), fin + 0.05);
+    sonidoEscuchaActual = { ganancia, osciladores: fuentes };
 }
 
 function sonarAcorde(nombres, duracion) {
@@ -1581,33 +1593,16 @@ function sonarAcorde(nombres, duracion) {
     const dur = Math.max(duracion || 0.4, 0.12);
     const ahora = audioContext.currentTime;
     const ganancia = audioContext.createGain();
-    const osciladores = [];
+    const nivel = (nombres.length > 1 ? 0.16 : 0.22) * FACTOR_PIANO;
+    const fin = envolverNota(ganancia, nivel, ahora, dur);
+    const fuentes = [];
     nombres.forEach(nombre => {
-        let letra = nombre.replace(/[0-9]/g, "").trim().toUpperCase();
-        const octava = parseInt(nombre.replace(/[^0-9]/g, "")) || 4;
-        if (letra === "DB") letra = "C#";
-        if (letra === "EB") letra = "D#";
-        if (letra === "GB") letra = "F#";
-        if (letra === "AB") letra = "G#";
-        if (letra === "BB") letra = "A#";
-        const frecuencia = (FRECUENCIAS_BASE_OCTAVA_0[letra] || 18.35) * Math.pow(2, octava);
-        const osc = audioContext.createOscillator();
-        const parcial = audioContext.createGain();
-        osc.type = "sine";
-        osc.frequency.value = frecuencia;
-        parcial.gain.value = 0.55;
-        osc.connect(parcial);
-        parcial.connect(ganancia);
-        osc.start();
-        osc.stop(ahora + dur);
-        osciladores.push(osc);
+        const midi = midiDesdeNombreIngles(nombre);
+        const piano = fuentePiano(ganancia, midi, fin + 0.05);
+        if (piano) fuentes.push(piano);
+        else tonoReserva(ganancia, 440 * Math.pow(2, (midi - 69) / 12), fin + 0.05).forEach(o => fuentes.push(o));
     });
-    const nivel = nombres.length > 1 ? 0.16 : 0.22;
-    ganancia.gain.setValueAtTime(nivel, ahora);
-    ganancia.gain.setValueAtTime(nivel, ahora + Math.max(0, dur - 0.08));
-    ganancia.gain.exponentialRampToValueAtTime(0.0001, ahora + dur);
-    ganancia.connect(audioContext.destination);
-    sonidoAcordeActual = { ganancia, osciladores };
+    sonidoAcordeActual = { ganancia, osciladores: fuentes };
 }
 
 function apagarVoz(voz) {
@@ -2334,3 +2329,5 @@ function regresarAlMenu() {
     document.getElementById("btn-volver-calentamiento").hidden = true;
     cerrarCalentamientos();
 }
+
+cargarPiano();
