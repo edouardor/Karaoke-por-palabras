@@ -410,6 +410,7 @@ async function iniciarApp(modo = 'entrenamiento') {
 
         // ----- MODO ESCUCHA SOLO: no hace falta micrófono -----
         if (modo === 'escucha') {
+            soltarMicrofono();
             asegurarAudioContext();
             if (audioContext.state === 'suspended') await audioContext.resume();
             iniciarEscuchaDesde(0);
@@ -421,7 +422,7 @@ async function iniciarApp(modo = 'entrenamiento') {
         }
 
         // ----- MODO ENTRENAMIENTO o KARAOKE (los dos escuchan el micrófono) -----
-        await asegurarMicrofono();
+        await asegurarMicrofono(modo);
 
         if (CANCIONES_AFINACION_LIBRE.includes(cancionSeleccionada)) {
             iniciarCalibracion();
@@ -914,10 +915,10 @@ function explicarNotaAtascada(notaObjetivoIngles) {
     const comparacion = cantada.objetivoMasAgudo ? "más aguda" : "más grave";
     document.getElementById('evaluacion').innerHTML =
         `Estás cantando <strong>${cantada.nombre}</strong> y tienes que cantar <strong>${cantada.objetivo}</strong>, que es ${comparacion}.`;
-    sonarNota(cantada.ingles, 1);
+    sonarNota(cantada.ingles, 1, VOLUMEN_MELODIA_GUIA);
     setTimeout(() => {
         if (idLocal !== idGuia) return;
-        sonarNota(notaObjetivoIngles, 2);
+        sonarNota(notaObjetivoIngles, 2, VOLUMEN_MELODIA_GUIA);
     }, 1000);
     setTimeout(() => {
         if (idLocal !== idGuia) return;
@@ -1268,18 +1269,33 @@ function esTelefono() {
     return navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
 }
 
-async function abrirStreamMicrofono() {
-    // En el Mac, Chrome y Safari quitan del micrófono lo que suena por el altavoz.
-    // En el karaoke esa melodía es la misma que la voz, así que también se la llevan
-    // y la nota no llega a ponerse verde. En el teléfono no pasa, y sin la subida
-    // automática de volumen hay que cantar muy fuerte para que el micrófono entre.
-    const pedidos = esTelefono()
-        ? [{ echoCancellation: true, noiseSuppression: true, autoGainControl: true }]
-        : [
-            { echoCancellation: false, noiseSuppression: false, autoGainControl: false, voiceIsolation: false },
-            { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-        ];
+function pedidosMicrofono(modo) {
+    // En el karaoke del teléfono el cancelador quita la melodía del micrófono,
+    // si no la nota se pone verde sola. En el Mac no hace falta: ahí se come la voz.
+    if (modo === "karaoke" && esTelefono()) {
+        return [{ echoCancellation: true, noiseSuppression: true, autoGainControl: true }];
+    }
+    // Con el cancelador encendido, el altavoz baja en cuanto entra sonido por el micrófono.
+    // {exact:false} es lo que de verdad lo apaga; un false suelto a veces se queda en el valor de antes.
+    const agc = esTelefono();
+    return [
+        {
+            echoCancellation: { exact: false },
+            noiseSuppression: { exact: false },
+            autoGainControl: agc ? true : { exact: false },
+            voiceIsolation: false
+        },
+        { noiseSuppression: { exact: false }, echoCancellation: false, autoGainControl: agc },
+        { echoCancellation: false, noiseSuppression: false, autoGainControl: agc, voiceIsolation: false },
+        { echoCancellation: false, noiseSuppression: false, autoGainControl: agc }
+    ];
+}
+
+async function abrirStreamMicrofono(modo) {
+    const pedidos = pedidosMicrofono(modo);
+    const exigeSinEco = !(modo === "karaoke" && esTelefono());
     let ultimoError = null;
+    let conEco = null;
     for (const audio of pedidos) {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio });
@@ -1287,29 +1303,77 @@ async function abrirStreamMicrofono() {
             if (pista && pista.applyConstraints) {
                 try { await pista.applyConstraints(audio); } catch (e) { /* el navegador no aplica alguno */ }
             }
+            const cancelaEco = !!(pista && pista.getSettings && pista.getSettings().echoCancellation);
+            if (exigeSinEco && cancelaEco) {
+                if (conEco) conEco.getTracks().forEach(p => p.stop());
+                conEco = stream;
+                continue;
+            }
+            if (conEco) conEco.getTracks().forEach(p => p.stop());
             return stream;
         } catch (e) {
             ultimoError = e;
             if (e.name !== "OverconstrainedError" && e.name !== "ConstraintNotSatisfiedError") throw e;
         }
     }
+    if (conEco) return conEco;
     throw ultimoError;
 }
 
-async function asegurarMicrofono() {
+function conectarMicrofono(stream) {
+    streamMicrofono = stream;
+    source = audioContext.createMediaStreamSource(stream);
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 2048;
+    dataArray = new Float32Array(analyser.fftSize);
+    source.connect(analyser);
+}
+
+function soltarMicrofono() {
+    if (streamMicrofono) {
+        streamMicrofono.getTracks().forEach(pista => pista.stop());
+        streamMicrofono = null;
+    }
+    if (source) {
+        try { source.disconnect(); } catch (e) { /* ya estaba suelto */ }
+        source = null;
+    }
+    analyser = null;
+    dataArray = null;
+}
+
+function microfonoEnMarcha() {
+    const pista = streamMicrofono && streamMicrofono.getAudioTracks()[0];
+    return !!(pista && pista.readyState === "live" && analyser);
+}
+
+async function fijarProcesadoMicrofono(modo) {
+    const pista = streamMicrofono && streamMicrofono.getAudioTracks()[0];
+    if (!pista) return;
+    for (const audio of pedidosMicrofono(modo)) {
+        try {
+            await pista.applyConstraints(audio);
+            const cancelaEco = pista.getSettings && pista.getSettings().echoCancellation === true;
+            if (modo === "karaoke" && esTelefono()) return;
+            if (!cancelaEco) return;
+        } catch (e) { /* se prueba el siguiente juego de ajustes */ }
+    }
+    soltarMicrofono();
+    conectarMicrofono(await abrirStreamMicrofono(modo));
+}
+
+async function asegurarMicrofono(modo) {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         const error = new Error("Este navegador no deja usar el micrófono desde esta dirección.");
         error.name = "SecurityError";
         throw error;
     }
     asegurarAudioContext();
-    if (!analyser) {
-        streamMicrofono = await abrirStreamMicrofono();
-        source = audioContext.createMediaStreamSource(streamMicrofono);
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 2048;
-        dataArray = new Float32Array(analyser.fftSize);
-        source.connect(analyser);
+    if (!microfonoEnMarcha()) {
+        soltarMicrofono();
+        conectarMicrofono(await abrirStreamMicrofono(modo || "entrenamiento"));
+    } else {
+        await fijarProcesadoMicrofono(modo || "entrenamiento");
     }
     if (audioContext.state === 'suspended') {
         await audioContext.resume();
@@ -1376,6 +1440,7 @@ function cerrarCalentamientos() {
 
 function volverACalentamientos() {
     ocultarResultadoMicrofono();
+    soltarMicrofono();
     cancelarTemporizadores();
     document.getElementById("titulo-cancion").style.display = "none";
     document.getElementById("controles-escucha").style.display = "none";
@@ -1407,7 +1472,7 @@ async function probarMicrofono() {
     texto.textContent = "Pidiendo permiso al micrófono…";
     document.getElementById("nivel-micro").style.width = "0%";
     try {
-        await asegurarMicrofono();
+        await asegurarMicrofono("entrenamiento");
         const pista = streamMicrofono && streamMicrofono.getAudioTracks()[0];
         if (pista && (pista.muted || pista.readyState !== "live")) {
             texto.className = "texto-micro error";
@@ -1814,7 +1879,7 @@ async function pasarAEntrenamiento() {
     ultimaNotaValidadaTexto = "";
 
     try {
-        await asegurarMicrofono();
+        await asegurarMicrofono("entrenamiento");
         // Si mientras tanto se volvió al menú, no se hace nada
         if (document.getElementById('status-box').style.display !== 'block') return;
 
@@ -2315,6 +2380,7 @@ function procesarKaraoke() {
 
 function regresarAlMenu() {
     ocultarResultadoMicrofono();
+    soltarMicrofono();
     cancelarTemporizadores();
     document.getElementById('titulo-cancion').style.display = "none";
     document.getElementById('controles-escucha').style.display = "none";
