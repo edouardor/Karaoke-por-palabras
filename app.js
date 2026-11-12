@@ -183,6 +183,12 @@ let analyser;
 let dataArray;
 let source;
 let streamMicrofono = null;
+let gananciaMicrofono = null;
+const GANANCIA_MICRO_TELEFONO = 8;   // sin el cancelador de eco el móvil no sube la voz: hay que amplificarla aquí
+
+function nivelMicrofono(modo) {
+    return (esTelefono() && modo !== "karaoke") ? GANANCIA_MICRO_TELEFONO : 1;
+}
 
 const MAPA_NOTAS_A_NUMERO = {
     "do": 0, "c": 0, "do#": 1, "c#": 1, "re": 2, "d": 2, "re#": 3, "d#": 3,
@@ -1320,13 +1326,16 @@ async function abrirStreamMicrofono(modo) {
     throw ultimoError;
 }
 
-function conectarMicrofono(stream) {
+function conectarMicrofono(stream, modo) {
     streamMicrofono = stream;
     source = audioContext.createMediaStreamSource(stream);
     analyser = audioContext.createAnalyser();
     analyser.fftSize = 2048;
     dataArray = new Float32Array(analyser.fftSize);
-    source.connect(analyser);
+    gananciaMicrofono = audioContext.createGain();
+    gananciaMicrofono.gain.value = nivelMicrofono(modo);
+    source.connect(gananciaMicrofono);
+    gananciaMicrofono.connect(analyser);
 }
 
 function soltarMicrofono() {
@@ -1340,6 +1349,7 @@ function soltarMicrofono() {
     }
     analyser = null;
     dataArray = null;
+    gananciaMicrofono = null;
 }
 
 function microfonoEnMarcha() {
@@ -1349,6 +1359,7 @@ function microfonoEnMarcha() {
 
 async function fijarProcesadoMicrofono(modo) {
     const pista = streamMicrofono && streamMicrofono.getAudioTracks()[0];
+    if (gananciaMicrofono) gananciaMicrofono.gain.value = nivelMicrofono(modo);
     if (!pista) return;
     for (const audio of pedidosMicrofono(modo)) {
         try {
@@ -1359,7 +1370,7 @@ async function fijarProcesadoMicrofono(modo) {
         } catch (e) { /* se prueba el siguiente juego de ajustes */ }
     }
     soltarMicrofono();
-    conectarMicrofono(await abrirStreamMicrofono(modo));
+    conectarMicrofono(await abrirStreamMicrofono(modo), modo);
 }
 
 async function asegurarMicrofono(modo) {
@@ -1371,7 +1382,7 @@ async function asegurarMicrofono(modo) {
     asegurarAudioContext();
     if (!microfonoEnMarcha()) {
         soltarMicrofono();
-        conectarMicrofono(await abrirStreamMicrofono(modo || "entrenamiento"));
+        conectarMicrofono(await abrirStreamMicrofono(modo || "entrenamiento"), modo || "entrenamiento");
     } else {
         await fijarProcesadoMicrofono(modo || "entrenamiento");
     }
