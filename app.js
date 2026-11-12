@@ -1647,9 +1647,9 @@ function actualizarControlesEscucha() {
     document.getElementById('btn-entrenar-aqui').style.display = sonando ? 'none' : 'inline-block';
 
     document.getElementById('btn-seguir-escucha').innerText =
-        (estadoEscucha === 'fin') ? '↺ Escuchar de nuevo' : '▶ Seguir escuchando';
+        (estadoEscucha === 'fin') ? 'Escuchar de nuevo ↺' : 'Seguir escuchando ▶';
     document.getElementById('btn-entrenar-aqui').innerText =
-        (estadoEscucha === 'fin') ? '🎤 Entrenar desde el principio' : '🎤 Entrenar desde esta palabra';
+        (estadoEscucha === 'fin') ? 'Entrenar desde el principio 🎤' : 'Entrenar desde esta palabra 🎤';
 
     const mensajes = { reproduciendo: '🎧 Escuchando...', pausada: '⏸ En pausa', fin: '🎧 Has escuchado toda la canción.' };
     document.getElementById('evaluacion').innerText = mensajes[estadoEscucha] || '';

@@ -13,7 +13,7 @@
     <h2>🎵 Karaoke Adaptativo por Palabras</h2>
     <p><strong>Coro Canticorum Bajos</strong><span id="titulo-cancion" class="titulo-cancion" style="display:none"></span></p>
 
-    <button type="button" id="btn-ayuda" class="btn-ayuda" onclick="abrirAyuda()">❓ Ayuda</button>
+    <button type="button" id="btn-ayuda" class="btn-ayuda" onclick="abrirAyuda()">Ayuda ❓</button>
 
     <dialog id="ayuda" class="ayuda" onclick="if (event.target === this) cerrarAyuda()">
         <h3>Cómo funciona</h3>
@@ -42,12 +42,12 @@
     
     <div id="zona-seleccion">
         <div class="barra-superior">
-            <button type="button" id="btn-inicio-menu" class="btn-home" onclick="cerrarCalentamientos()">🏠 Inicio</button>
+            <button type="button" id="btn-inicio-menu" class="btn-home" onclick="cerrarCalentamientos()">Inicio 🏠</button>
         </div>
         <div id="prueba-micro" class="prueba-micro">
             <div class="fila-pruebas">
-                <button type="button" id="btn-probar-micro" onclick="probarMicrofono()">🎤 Probar micrófono</button>
-                <button type="button" id="btn-calentamiento" onclick="mostrarCalentamientos()">Calentamiento</button>
+                <button type="button" id="btn-probar-micro" onclick="probarMicrofono()">Probar micrófono 🎤</button>
+                <button type="button" id="btn-calentamiento" onclick="mostrarCalentamientos()">Calentamiento 🔥</button>
             </div>
             <div id="lista-calentamiento" class="lista-calentamiento" hidden>
                 <button type="button" onclick="empezarCalentamiento(1)">1</button>
@@ -62,7 +62,7 @@
             </div>
         </div>
         <div id="elige-pieza">
-        <label for="selector-cancion" style="display:block; margin-bottom:10px; color:#aaa;">Elige una pieza para ensayar:</label>
+        <label for="selector-cancion" style="display:block; margin-bottom:10px; color:#aaa; font-weight:700;">Elige una pieza para ensayar:</label>
         <select id="selector-cancion" onchange="alCambiarCancion()" style="background:#2a2a30; color:#fff; border:2px solid #444; padding:10px; border-radius:8px; margin-bottom:15px; font-size:16px; width:100%;">
             <option value="Cumpleanos Feliz" selected>Cumpleaños Feliz (prueba)</option>
             <option value="Escucha los arcangeles">¡Escucha, los arcángeles cantan!</option>
@@ -97,15 +97,15 @@
     </div>
 
     <div id="botones-inicio" class="botones-inicio">
-        <button id="btn-comenzar" onclick="iniciarApp('entrenamiento')">🎤 Modo entrenamiento</button>
-        <button id="btn-karaoke" class="btn-karaoke" onclick="iniciarApp('karaoke')">🎶 Modo karaoke</button>
-        <button id="btn-escucha" class="btn-escucha" onclick="iniciarApp('escucha')">🎧 Modo escucha solo</button>
+        <button id="btn-comenzar" onclick="iniciarApp('entrenamiento')">Modo entrenamiento 🎤</button>
+        <button id="btn-karaoke" class="btn-karaoke" onclick="iniciarApp('karaoke')">Modo karaoke 🎶</button>
+        <button id="btn-escucha" class="btn-escucha" onclick="iniciarApp('escucha')">Modo escucha solo 🎧</button>
     </div>
     
     <div class="status-box" id="status-box" style="display: none;">
         <div class="barra-superior">
-            <button class="btn-home" onclick="regresarAlMenu()" aria-label="Volver al inicio" title="Volver al inicio">🏠 Inicio</button>
-            <button type="button" id="btn-volver-calentamiento" class="btn-home" hidden onclick="volverACalentamientos()">Calentamiento</button>
+            <button class="btn-home" onclick="regresarAlMenu()" aria-label="Volver al inicio" title="Volver al inicio">Inicio 🏠</button>
+            <button type="button" id="btn-volver-calentamiento" class="btn-home" hidden onclick="volverACalentamientos()">Calentamiento 🔥</button>
         </div>
 
         <div class="navegacion-palabra">
@@ -123,20 +123,20 @@
             <label class="control-velocidad" for="velocidad-karaoke">Velocidad <span id="txt-velocidad">×1</span>
                 <input type="range" id="velocidad-karaoke" min="0.5" max="2" value="1" step="0.05" oninput="cambiarVelocidadKaraoke(this.value)">
             </label>
-            <button id="btn-pausa-karaoke" class="btn-pausa" onclick="pausarKaraoke()" aria-label="Pausa" title="Pausa">❚❚ Pausa</button>
-            <button id="btn-seguir-karaoke" class="btn-karaoke" onclick="seguirKaraoke()" style="display: none;">▶ Seguir cantando</button>
-            <button id="btn-repetir-karaoke" class="btn-karaoke" onclick="iniciarKaraokeDesde(0)" style="display: none;">↺ Cantar otra vez</button>
+            <button id="btn-pausa-karaoke" class="btn-pausa" onclick="pausarKaraoke()" aria-label="Pausa" title="Pausa">Pausa ❚❚</button>
+            <button id="btn-seguir-karaoke" class="btn-karaoke" onclick="seguirKaraoke()" style="display: none;">Seguir cantando ▶</button>
+            <button id="btn-repetir-karaoke" class="btn-karaoke" onclick="iniciarKaraokeDesde(0)" style="display: none;">Cantar otra vez ↺</button>
         </div>
 
         <div id="controles-escucha" class="controles-escucha" style="display: none;">
-            <button id="btn-pausa-escucha" class="btn-pausa" onclick="pausarEscucha()" aria-label="Pausa" title="Pausa">❚❚ Pausa</button>
-            <button id="btn-seguir-escucha" class="btn-escucha" onclick="iniciarEscuchaDesde(fraseActualIndex)" style="display: none;">▶ Seguir escuchando</button>
-            <button id="btn-entrenar-aqui" onclick="pasarAEntrenamiento()" style="display: none;">🎤 Entrenar desde esta palabra</button>
+            <button id="btn-pausa-escucha" class="btn-pausa" onclick="pausarEscucha()" aria-label="Pausa" title="Pausa">Pausa ❚❚</button>
+            <button id="btn-seguir-escucha" class="btn-escucha" onclick="iniciarEscuchaDesde(fraseActualIndex)" style="display: none;">Seguir escuchando ▶</button>
+            <button id="btn-entrenar-aqui" onclick="pasarAEntrenamiento()" style="display: none;">Entrenar desde esta palabra 🎤</button>
         </div>
         
         <div id="zona-reinicio" style="display: none;">
-            <button type="button" class="btn-hoy" onclick="abrirCancionesHoy()">📋 Canciones estudiadas hoy</button>
-            <button class="btn-volver" onclick="regresarAlMenu()">⬅️ Volver a Selección</button>
+            <button type="button" class="btn-hoy" onclick="abrirCancionesHoy()">Canciones estudiadas hoy 📋</button>
+            <button class="btn-volver" onclick="regresarAlMenu()">Volver a Selección ⬅️</button>
         </div>
     </div>
 </div>
