@@ -1,5 +1,10 @@
 {
   "titulo": "Salta Navideña",
+  "coro": {
+    "tipo": "entradas",
+    "mensajeEspera": "Esperamos a las sopranos",
+    "archivo": "Salta Navideña coro.json"
+  },
   "lineas": [
     {
       "linea_completa": "Va-mos-a bus-car al-ni-ño Jé-sus,",

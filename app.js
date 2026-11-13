@@ -91,12 +91,17 @@ let cancionActual = "";                  // canción elegida (para pasar de escu
 let piezaPendiente = "";                 // pieza abierta desde Calentamiento, fuera de la lista
 // ---- Coro (canon): sopranos, contraltos y bajos; el cantante es siempre el bajo ----
 let configCoro = null;                   // metadatos de la pieza (null si no tiene versión coro)
+let datosCoroEntradas = null;            // notas absolutas de sopranos/contraltos (tipo entradas)
 let notasBaseCanon = [];                 // melodía original, para construir las otras voces
 let vocesCoro = [];                      // notas que se oyen y no se cantan (sopranos + contraltos)
 let fuentesCoroActivas = [];             // notas de coro sonando a la vez
 let temporizadoresCoro = [];
 let eligioCoro = false;                  // karaoke en modo Coro en esta reproducción
 const VOLUMEN_CORO = 0.22;               // cada voz del coro, un poco por debajo de la melodía karaoke
+
+function piezaConCoro(coro) {
+    return !!(coro && (coro.tipo === "canon" || coro.tipo === "entradas"));
+}
 
 let bucleAudioActivo = false;            // evita arrancar varios bucles de audio a la vez
 
@@ -372,7 +377,12 @@ async function iniciarApp(modo = 'entrenamiento') {
             if (pistaMelodia) notasRaw = pistaMelodia.notes;
         }
         acompanamiento = acordesDe(datosNotas, pistaMelodia);
-        configCoro = (datosTexto.coro && datosTexto.coro.tipo === "canon") ? datosTexto.coro : null;
+        configCoro = piezaConCoro(datosTexto.coro) ? datosTexto.coro : null;
+        datosCoroEntradas = null;
+        if (configCoro && configCoro.tipo === "entradas" && configCoro.archivo) {
+            const resCoro = await cargarArchivoCancion(configCoro.archivo);
+            if (resCoro.ok) datosCoroEntradas = await resCoro.json();
+        }
         notasBaseCanon = (notasRaw || []).map(n => ({
             time: typeof n.time === "number" ? n.time : 0,
             duration: n.duration || 0.4,
@@ -1254,7 +1264,7 @@ async function actualizarOpcionCoro() {
         }
         let datos = await res.json();
         if (datos.default) datos = datos.default;
-        const tiene = !!(datos.coro && datos.coro.tipo === "canon");
+        const tiene = piezaConCoro(datos.coro);
         caja.hidden = !tiene;
         if (!tiene) {
             const solo = caja.querySelector('input[value="solo"]');
@@ -1625,20 +1635,43 @@ function entradaBajosCoro(config) {
     return bajos && typeof bajos.entrada === "number" ? bajos.entrada : 2;
 }
 
-function offsetEntradaBajos() {
-    if (!eligioCoro || !configCoro) return 0;
-    return entradaBajosCoro(configCoro) * (configCoro.retraso || 0);
+function pasosDesplazamientoBajos() {
+    if (!eligioCoro || !configCoro) return [0];
+    if (configCoro.tipo === "entradas") {
+        const pasos = datosCoroEntradas && datosCoroEntradas.pasosBajos;
+        return (pasos && pasos.length) ? pasos : [0];
+    }
+    if (configCoro.tipo === "canon") {
+        return [entradaBajosCoro(configCoro) * (configCoro.retraso || 0)];
+    }
+    return [0];
 }
 
-function tiempoInicioCanon() {
+function offsetEntradaBajos() {
+    return pasosDesplazamientoBajos()[0] || 0;
+}
+
+function tiempoInicioCoro() {
+    if (configCoro && configCoro.tipo === "entradas") {
+        if (datosCoroEntradas && typeof datosCoroEntradas.inicio === "number") return datosCoroEntradas.inicio;
+        return 0;
+    }
     if (!notasBaseCanon.length) return 0;
     return Math.min(...notasBaseCanon.map(n => n.time));
 }
 
-// Sopranos y contraltos: misma melodía, desfasada, y al terminar vuelven a empezar.
-// La pieza corta cuando acaban los bajos.
+// Canon: misma melodía desfasada y en bucle. Entradas: pistas ya montadas (sopranos/contraltos).
 function armarVocesCoro(notasBase, config) {
-    if (!config || config.tipo !== "canon" || !notasBase.length) return [];
+    if (!config) return [];
+    if (config.tipo === "entradas") {
+        const lista = (datosCoroEntradas && datosCoroEntradas.voces) || [];
+        return lista.map(n => ({
+            time: n.time,
+            duracion: n.duration || n.duracion || 0.4,
+            nombre: n.name || n.nombre || nombreInglesDesdeMidi(n.midi)
+        }));
+    }
+    if (config.tipo !== "canon" || !notasBase.length) return [];
     const retraso = config.retraso || 0;
     const inicio = Math.min(...notasBase.map(n => n.time));
     const finUna = Math.max(...notasBase.map(n => n.time + (n.duration || 0.4)));
@@ -2095,19 +2128,22 @@ async function pasarAEntrenamiento() {
 // Cada nota cuenta como acierto si, mientras suena, la voz entra en la tolerancia.
 
 function construirLineaKaraoke() {
-    const offset = offsetEntradaBajos();
+    const pasos = pasosDesplazamientoBajos();
     notasLineaKaraoke = [];
-    FRASES_JUEGO.forEach((palabra, indicePalabra) => {
-        palabra.notesIngles.forEach((ingles, indiceNota) => {
-            notasLineaKaraoke.push({
-                palabraIndex: indicePalabra,
-                notaIndex: indiceNota,
-                tiempo: palabra.tiempos[indiceNota] + offset,
-                duracion: palabra.duraciones[indiceNota] || 0.4,
-                ingles: ingles,
-                nombre: palabra.notes[indiceNota],
-                acertada: false,
-                juzgada: false
+    pasos.forEach((offset, pasada) => {
+        FRASES_JUEGO.forEach((palabra, indicePalabra) => {
+            palabra.notesIngles.forEach((ingles, indiceNota) => {
+                notasLineaKaraoke.push({
+                    palabraIndex: indicePalabra,
+                    notaIndex: indiceNota,
+                    tiempo: palabra.tiempos[indiceNota] + offset,
+                    duracion: palabra.duraciones[indiceNota] || 0.4,
+                    ingles: ingles,
+                    nombre: palabra.notes[indiceNota],
+                    pasada,
+                    acertada: false,
+                    juzgada: false
+                });
             });
         });
     });
@@ -2246,11 +2282,15 @@ function mostrarSilencioKaraoke(tiempoSiguiente, siguienteNota) {
     notaEnJuicio = null;
     const pantalla = document.getElementById('palabra-pantalla');
     pantalla.className = "palabra-actual silencio";
-    const esperaCoro = eligioCoro && configCoro && configCoro.mensajeEspera
-        && siguienteNota === notasLineaKaraoke[0];
-    pantalla.innerText = esperaCoro
-        ? `🤫 ${configCoro.mensajeEspera}`
-        : "🤫 Aquí no cantamos";
+    let aviso = "🤫 Aquí no cantamos";
+    if (eligioCoro && configCoro) {
+        if (siguienteNota === notasLineaKaraoke[0] && configCoro.mensajeEspera) {
+            aviso = `🤫 ${configCoro.mensajeEspera}`;
+        } else if (configCoro.tipo === "entradas" && siguienteNota.pasada === 1) {
+            aviso = "🤫 Esperamos a las contraltos";
+        }
+    }
+    pantalla.innerText = aviso;
     const palabra = FRASES_JUEGO[siguienteNota.palabraIndex].palabra
         .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const dibujar = () => {
@@ -2390,7 +2430,7 @@ function comenzarReproduccionKaraoke(idEjecucion) {
         return;
     }
     if (eligioCoro && indiceNotaKaraoke === 0) {
-        relojKaraoke = { t0: performance.now(), tiempoBase: tiempoInicioCanon() };
+        relojKaraoke = { t0: performance.now(), tiempoBase: tiempoInicioCoro() };
     } else {
         relojKaraoke = relojConAnticipo(nota.tiempo);
     }
