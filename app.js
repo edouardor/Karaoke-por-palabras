@@ -89,6 +89,14 @@ let enSilencio = false;                  // true mientras se muestra "Aquí no c
 let intervaloSilencio = null;            // actualiza la cuenta atrás del silencio
 let cancionActual = "";                  // canción elegida (para pasar de escucha a entrenamiento)
 let piezaPendiente = "";                 // pieza abierta desde Calentamiento, fuera de la lista
+// ---- Coro (canon): sopranos, contraltos y bajos; el cantante es siempre el bajo ----
+let configCoro = null;                   // metadatos de la pieza (null si no tiene versión coro)
+let notasBaseCanon = [];                 // melodía original, para construir las otras voces
+let vocesCoro = [];                      // notas que se oyen y no se cantan (sopranos + contraltos)
+let fuentesCoroActivas = [];             // notas de coro sonando a la vez
+let temporizadoresCoro = [];
+let eligioCoro = false;                  // karaoke en modo Coro en esta reproducción
+const VOLUMEN_CORO = 0.22;               // cada voz del coro, un poco por debajo de la melodía karaoke
 
 let bucleAudioActivo = false;            // evita arrancar varios bucles de audio a la vez
 
@@ -364,6 +372,15 @@ async function iniciarApp(modo = 'entrenamiento') {
             if (pistaMelodia) notasRaw = pistaMelodia.notes;
         }
         acompanamiento = acordesDe(datosNotas, pistaMelodia);
+        configCoro = (datosTexto.coro && datosTexto.coro.tipo === "canon") ? datosTexto.coro : null;
+        notasBaseCanon = (notasRaw || []).map(n => ({
+            time: typeof n.time === "number" ? n.time : 0,
+            duration: n.duration || 0.4,
+            midi: typeof n.midi === "number" ? n.midi : midiDesdeNombreIngles(n.name || n.note || "A3"),
+            name: n.name || n.note || ""
+        }));
+        vocesCoro = [];
+        eligioCoro = false;
 
         let tAcumulado = 0;
         let notasListaCompleta = notasRaw.map(n => {
@@ -452,6 +469,11 @@ async function iniciarApp(modo = 'entrenamiento') {
 
         // ----- MODO ENTRENAMIENTO o KARAOKE (los dos escuchan el micrófono) -----
         await asegurarMicrofono(modo);
+
+        if (modo === 'karaoke') {
+            eligioCoro = !!(configCoro && document.querySelector('input[name="modo-coro"]:checked')?.value === 'coro');
+            if (eligioCoro) vocesCoro = armarVocesCoro(notasBaseCanon, configCoro);
+        }
 
         if (CANCIONES_AFINACION_LIBRE.includes(cancionSeleccionada)) {
             iniciarCalibracion();
@@ -747,6 +769,7 @@ function cancelarTemporizadores() {
     pendienteKaraoke = null;
     pasoCuentaKaraoke = null;
     cancelarAcompanamiento();
+    cancelarVocesCoro();
     limpiarSilencioEscucha();
     silenciarSonidoEscucha();
     modoEscucha = false;
@@ -1208,6 +1231,38 @@ function alCambiarCancion() {
     const slider = document.getElementById('selector-dificultad');
     slider.value = DIFICULTAD_INICIAL;
     actualizarTextoDificultad(slider.value);
+    actualizarOpcionCoro();
+}
+
+function alCambiarCoro() {
+    // Solo afecta al próximo karaoke; no hace falta recargar la pieza.
+}
+
+async function actualizarOpcionCoro() {
+    const caja = document.getElementById('opcion-coro');
+    if (!caja) return;
+    const stem = (document.getElementById('selector-cancion')?.value || "").trim();
+    if (!stem) {
+        caja.hidden = true;
+        return;
+    }
+    try {
+        const res = await cargarArchivoCancion(`${stem} txt.json`);
+        if (!res.ok) {
+            caja.hidden = true;
+            return;
+        }
+        let datos = await res.json();
+        if (datos.default) datos = datos.default;
+        const tiene = !!(datos.coro && datos.coro.tipo === "canon");
+        caja.hidden = !tiene;
+        if (!tiene) {
+            const solo = caja.querySelector('input[value="solo"]');
+            if (solo) solo.checked = true;
+        }
+    } catch (e) {
+        caja.hidden = true;
+    }
 }
 document.addEventListener('DOMContentLoaded', alCambiarCancion);
 
@@ -1561,6 +1616,101 @@ function buclePruebaMicro(id) {
 // Suena la canción entera, palabra tras palabra, con el ritmo real del MIDI
 // (incluidos los silencios) y sin parar al final de cada palabra.
 
+function nombreInglesDesdeMidi(midi) {
+    return NOMBRES_NOTA_INGLES[((midi % 12) + 12) % 12] + (Math.floor(midi / 12) - 1);
+}
+
+function entradaBajosCoro(config) {
+    const bajos = (config.voces || []).find(v => v.parte === "bajos");
+    return bajos && typeof bajos.entrada === "number" ? bajos.entrada : 2;
+}
+
+function offsetEntradaBajos() {
+    if (!eligioCoro || !configCoro) return 0;
+    return entradaBajosCoro(configCoro) * (configCoro.retraso || 0);
+}
+
+function tiempoInicioCanon() {
+    if (!notasBaseCanon.length) return 0;
+    return Math.min(...notasBaseCanon.map(n => n.time));
+}
+
+// Sopranos y contraltos: misma melodía, desfasada, y al terminar vuelven a empezar.
+// La pieza corta cuando acaban los bajos.
+function armarVocesCoro(notasBase, config) {
+    if (!config || config.tipo !== "canon" || !notasBase.length) return [];
+    const retraso = config.retraso || 0;
+    const inicio = Math.min(...notasBase.map(n => n.time));
+    const finUna = Math.max(...notasBase.map(n => n.time + (n.duration || 0.4)));
+    const ciclo = Math.max(0.12, finUna - inicio);
+    const finBajos = finUna + entradaBajosCoro(config) * retraso;
+    const sueltos = [];
+    (config.voces || []).forEach(voz => {
+        if (voz.parte === "bajos") return;
+        const entrada = (voz.entrada || 0) * retraso;
+        const oct = (voz.octava || 0) * 12;
+        for (let vuelta = 0; ; vuelta++) {
+            const desfase = entrada + vuelta * ciclo;
+            if (inicio + desfase >= finBajos - 0.001) break;
+            notasBase.forEach(n => {
+                const time = n.time + desfase;
+                if (time >= finBajos - 0.001) return;
+                const natural = n.duration || 0.4;
+                sueltos.push({
+                    time,
+                    duracion: Math.min(natural, Math.max(0.12, finBajos - time)),
+                    nombre: nombreInglesDesdeMidi(n.midi + oct)
+                });
+            });
+        }
+    });
+    sueltos.sort((a, b) => a.time - b.time);
+    return sueltos;
+}
+
+function cancelarVocesCoro() {
+    temporizadoresCoro.forEach(t => clearTimeout(t));
+    temporizadoresCoro = [];
+}
+
+function silenciarVocesCoro() {
+    cancelarVocesCoro();
+    fuentesCoroActivas.forEach(voz => apagarVoz(voz));
+    fuentesCoroActivas = [];
+}
+
+function sonarNotaCoro(nombreNotaIngles, duracion) {
+    asegurarAudioContext();
+    const dur = Math.max(duracion || 0.4, 0.12);
+    const ahora = audioContext.currentTime;
+    const ganancia = audioContext.createGain();
+    const fin = envolverNota(ganancia, VOLUMEN_CORO * FACTOR_PIANO, ahora, dur);
+    const midi = midiDesdeNombreIngles(nombreNotaIngles);
+    const piano = fuentePiano(ganancia, midi, fin + 0.05);
+    const fuentes = piano ? [piano] : tonoReserva(ganancia, 440 * Math.pow(2, (midi - 69) / 12), fin + 0.05);
+    const voz = { ganancia, osciladores: fuentes };
+    fuentesCoroActivas.push(voz);
+    const limpiar = setTimeout(() => {
+        fuentesCoroActivas = fuentesCoroActivas.filter(v => v !== voz);
+    }, (dur + 0.1) * 1000);
+    temporizadoresCoro.push(limpiar);
+}
+
+function programarVocesCoro(reloj, idEjecucion, activo, velocidad) {
+    const ritmo = velocidad || 1;
+    cancelarVocesCoro();
+    if (!eligioCoro || !vocesCoro.length) return;
+    vocesCoro.forEach(nota => {
+        if (nota.time < reloj.tiempoBase - 0.001) return;
+        const espera = esperaMsHasta(reloj, nota.time, ritmo);
+        const timer = setTimeout(() => {
+            if (idEjecucion !== idGuia || !activo()) return;
+            sonarNotaCoro(nota.nombre, nota.duracion / ritmo);
+        }, espera);
+        temporizadoresCoro.push(timer);
+    });
+}
+
 // Pistas posteriores a la melodía: se oyen, pero no se asignan a sílabas.
 function acordesDe(datosNotas, pistaMelodia) {
     const sueltos = [];
@@ -1659,7 +1809,9 @@ function cambiarVelocidadKaraoke(valor) {
         if (pendienteKaraoke && pendienteKaraoke.idEjecucion === idGuia) {
             programarKaraoke(pendienteKaraoke.tiempoObjetivo, pendienteKaraoke.accion, pendienteKaraoke.idEjecucion);
         }
-        programarAcompanamiento(relojKaraoke, idGuia, () => modoKaraoke && estadoKaraoke === "reproduciendo", null, nueva);
+        const activo = () => modoKaraoke && estadoKaraoke === "reproduciendo";
+        programarAcompanamiento(relojKaraoke, idGuia, activo, null, nueva);
+        programarVocesCoro(relojKaraoke, idGuia, activo, nueva);
         actualizarLucesCompas();
         return;
     }
@@ -1732,6 +1884,7 @@ function silenciarAcorde() {
 function silenciarSonidoEscucha() {
     silenciarMelodia();
     silenciarAcorde();
+    silenciarVocesCoro();
 }
 
 function actualizarControlesEscucha() {
@@ -1942,13 +2095,14 @@ async function pasarAEntrenamiento() {
 // Cada nota cuenta como acierto si, mientras suena, la voz entra en la tolerancia.
 
 function construirLineaKaraoke() {
+    const offset = offsetEntradaBajos();
     notasLineaKaraoke = [];
     FRASES_JUEGO.forEach((palabra, indicePalabra) => {
         palabra.notesIngles.forEach((ingles, indiceNota) => {
             notasLineaKaraoke.push({
                 palabraIndex: indicePalabra,
                 notaIndex: indiceNota,
-                tiempo: palabra.tiempos[indiceNota],
+                tiempo: palabra.tiempos[indiceNota] + offset,
                 duracion: palabra.duraciones[indiceNota] || 0.4,
                 ingles: ingles,
                 nombre: palabra.notes[indiceNota],
@@ -2092,7 +2246,11 @@ function mostrarSilencioKaraoke(tiempoSiguiente, siguienteNota) {
     notaEnJuicio = null;
     const pantalla = document.getElementById('palabra-pantalla');
     pantalla.className = "palabra-actual silencio";
-    pantalla.innerText = "🤫 Aquí no cantamos";
+    const esperaCoro = eligioCoro && configCoro && configCoro.mensajeEspera
+        && siguienteNota === notasLineaKaraoke[0];
+    pantalla.innerText = esperaCoro
+        ? `🤫 ${configCoro.mensajeEspera}`
+        : "🤫 Aquí no cantamos";
     const palabra = FRASES_JUEGO[siguienteNota.palabraIndex].palabra
         .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const dibujar = () => {
@@ -2231,13 +2389,23 @@ function comenzarReproduccionKaraoke(idEjecucion) {
         terminarKaraoke();
         return;
     }
-    relojKaraoke = relojConAnticipo(nota.tiempo);
+    if (eligioCoro && indiceNotaKaraoke === 0) {
+        relojKaraoke = { t0: performance.now(), tiempoBase: tiempoInicioCanon() };
+    } else {
+        relojKaraoke = relojConAnticipo(nota.tiempo);
+    }
     estadoKaraoke = "reproduciendo";
     palabraMostradaIndex = -1;
     actualizarControlesKaraoke();
     actualizarLucesCompas();
-    programarAcompanamiento(relojKaraoke, idEjecucion, () => modoKaraoke && estadoKaraoke === "reproduciendo", null, velocidadKaraoke);
-    if (nota.tiempo - relojKaraoke.tiempoBase > 0.02) {
+    const activo = () => modoKaraoke && estadoKaraoke === "reproduciendo";
+    programarAcompanamiento(relojKaraoke, idEjecucion, activo, null, velocidadKaraoke);
+    programarVocesCoro(relojKaraoke, idEjecucion, activo, velocidadKaraoke);
+    const espera = nota.tiempo - relojKaraoke.tiempoBase;
+    if (espera > UMBRAL_SILENCIO_ESCUCHA) {
+        mostrarSilencioKaraoke(nota.tiempo, nota);
+        programarKaraoke(nota.tiempo, () => emitirNotaKaraoke(idEjecucion), idEjecucion);
+    } else if (espera > 0.02) {
         mostrarPalabraKaraoke(nota.palabraIndex);
         programarKaraoke(nota.tiempo, () => emitirNotaKaraoke(idEjecucion), idEjecucion);
     } else {

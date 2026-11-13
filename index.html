@@ -84,6 +84,13 @@
         </select>
         </div>
 
+        <div id="opcion-coro" class="opcion-coro" hidden>
+            <span class="opcion-coro-titulo">Karaoke:</span>
+            <label><input type="radio" name="modo-coro" value="solo" checked onchange="alCambiarCoro()"> Solo</label>
+            <label><input type="radio" name="modo-coro" value="coro" onchange="alCambiarCoro()"> Coro</label>
+            <p class="opcion-coro-ayuda">En Coro oyes también las otras voces del canon. Solo se canta la parte de bajos.</p>
+        </div>
+
         <div class="control-dificultad">
             <label style="color:#eee; font-size:15px; font-weight:600;">Exigencia de Afinación: <span id="txt-dificultad" style="color:#00b0ff;">Iniciación / Muy Fácil 👶</span></label>
             <input type="range" id="selector-dificultad" min="15" max="60" value="60" step="15" oninput="actualizarTextoDificultad(this.value)">
@@ -143,6 +150,6 @@
 
     <!--cargamos el motor -->
     
-    <script src="./app.js?v=piano6"></script>
+    <script src="./app.js?v=piano8"></script>
 </body>
 </html>

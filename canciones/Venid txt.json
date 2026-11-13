@@ -1,5 +1,15 @@
 {
   "titulo": "Venid",
+  "coro": {
+    "tipo": "canon",
+    "retraso": 8,
+    "mensajeEspera": "Esperamos a las sopranos y las contraltos",
+    "voces": [
+      { "parte": "sopranos", "entrada": 0, "octava": 1 },
+      { "parte": "contraltos", "entrada": 1, "octava": 0 },
+      { "parte": "bajos", "entrada": 2, "octava": 0 }
+    ]
+  },
   "lineas": [
     {
       "linea_completa": "Ve-nid",

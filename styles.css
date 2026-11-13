@@ -87,6 +87,19 @@
         .texto-micro { color: #ccc; font-size: 15px; line-height: 1.4; margin: 10px 0 0; min-height: 2.8em; }
         .texto-micro.ok { color: #00e676; font-weight: 600; }
         .texto-micro.error { color: #ff5252; }
+        .opcion-coro {
+            margin: 0 0 18px 0;
+            background: #222226;
+            padding: 14px 15px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            color: #eee;
+            font-size: 15px;
+        }
+        .opcion-coro-titulo { font-weight: 600; margin-right: 10px; }
+        .opcion-coro label { margin-right: 16px; cursor: pointer; }
+        .opcion-coro input { margin-right: 6px; accent-color: #00b0ff; }
+        .opcion-coro-ayuda { margin: 10px 0 0 0; color: #aaa; font-size: 13px; line-height: 1.4; }
         .control-dificultad { margin: 20px 0 30px 0; background: #222226; padding: 15px; border-radius: 12px; border: 1px solid #333; }
         .control-dificultad input[type=range] { width: 100%; margin-top: 10px; accent-color: #00b0ff; cursor: pointer; }
         .etiquetas-rango { display: flex; justify-content: space-between; font-size: 11px; color: #aaa; margin-top: 5px; padding: 0 2px; }
