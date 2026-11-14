@@ -67,6 +67,7 @@ let estadoKaraoke = 'reproduciendo';     // 'cuenta' | 'reproduciendo' | 'pausad
 let cuentaKaraokePendiente = false;      // la pausa pilló el tono o la cuenta atrás
 let pulsosPorCompas = 4;
 let segundosPorPulso = 0.6;
+let firmasCompas = [{ time: 0, pulsos: 4, segundosPorPulso: 0.6 }];
 let modoSolicitado = 'entrenamiento';    // modo con el que se arrancó esta pieza
 let notasLineaKaraoke = [];              // todas las notas, en orden, con su palabra
 let indiceNotaKaraoke = 0;
@@ -2173,9 +2174,26 @@ function comentarioKaraoke(porcentaje) {
     return "Hoy ha ganado la escucha. Sin forzar la voz, la próxima sale mejor.";
 }
 
+function firmaEnTiempo(tiempo) {
+    let activa = firmasCompas[0] || { time: 0, pulsos: pulsosPorCompas, segundosPorPulso };
+    for (const firma of firmasCompas) {
+        if (tiempo + 1e-6 >= firma.time) activa = firma;
+        else break;
+    }
+    return activa;
+}
+
+function restaurarCompasInicial() {
+    const firma = firmasCompas[0] || { pulsos: 4, segundosPorPulso: 0.6 };
+    pulsosPorCompas = firma.pulsos;
+    segundosPorPulso = firma.segundosPorPulso;
+}
+
 function pulsoDeTiempo(tiempo) {
-    const pulso = Math.floor(tiempo / segundosPorPulso + 1e-4);
-    return (pulso % pulsosPorCompas) + 1;
+    const firma = firmaEnTiempo(tiempo);
+    const local = Math.max(0, tiempo - (firma.time || 0));
+    const pulso = Math.floor(local / firma.segundosPorPulso + 1e-4);
+    return (pulso % firma.pulsos) + 1;
 }
 
 function actualizarLucesCompas() {
@@ -2188,6 +2206,19 @@ function actualizarLucesCompas() {
         return;
     }
     caja.hidden = false;
+    let tiempoActual = null;
+    if (modoKaraoke && estadoKaraoke === 'reproduciendo') {
+        tiempoActual = relojKaraoke.tiempoBase + (performance.now() - relojKaraoke.t0) / 1000 * velocidadKaraoke;
+        pulsoCompasMarcado = pulsoDeTiempo(tiempoActual);
+    } else if (modoEscucha && estadoEscucha === 'reproduciendo') {
+        tiempoActual = relojEscucha.tiempoBase + (performance.now() - relojEscucha.t0) / 1000;
+        pulsoCompasMarcado = pulsoDeTiempo(tiempoActual);
+    }
+    if (tiempoActual != null) {
+        const firma = firmaEnTiempo(tiempoActual);
+        pulsosPorCompas = firma.pulsos;
+        segundosPorPulso = firma.segundosPorPulso;
+    }
     if (caja.childElementCount !== pulsosPorCompas) {
         caja.replaceChildren();
         for (let i = 1; i <= pulsosPorCompas; i++) {
@@ -2195,13 +2226,6 @@ function actualizarLucesCompas() {
             numero.textContent = String(i);
             caja.appendChild(numero);
         }
-    }
-    if (modoKaraoke && estadoKaraoke === 'reproduciendo') {
-        const tiempo = relojKaraoke.tiempoBase + (performance.now() - relojKaraoke.t0) / 1000 * velocidadKaraoke;
-        pulsoCompasMarcado = pulsoDeTiempo(tiempo);
-    } else if (modoEscucha && estadoEscucha === 'reproduciendo') {
-        const tiempo = relojEscucha.tiempoBase + (performance.now() - relojEscucha.t0) / 1000;
-        pulsoCompasMarcado = pulsoDeTiempo(tiempo);
     }
     Array.from(caja.children).forEach((el, i) => {
         el.classList.toggle('activo', i + 1 === pulsoCompasMarcado);
@@ -2350,12 +2374,25 @@ function cerrarNotaKaraoke(idEjecucion, finJuicio) {
 
 function guardarCompas(datosNotas) {
     const header = (datosNotas && datosNotas.header) || {};
-    const firma = header.timeSignatures && header.timeSignatures[0] && header.timeSignatures[0].timeSignature;
-    const numerador = firma && firma[0] ? firma[0] : 4;
-    const denominador = firma && firma[1] ? firma[1] : 4;
     const bpm = (header.tempos && header.tempos[0] && header.tempos[0].bpm) || 100;
-    pulsosPorCompas = Math.min(12, Math.max(1, Math.round(numerador)));
-    segundosPorPulso = (60 / bpm) * (4 / denominador);
+    const ppq = header.ppq || 480;
+    const lista = (header.timeSignatures && header.timeSignatures.length)
+        ? header.timeSignatures
+        : [{ ticks: 0, timeSignature: [4, 4] }];
+    firmasCompas = lista.map(entrada => {
+        const firma = entrada.timeSignature || [4, 4];
+        const numerador = firma[0] || 4;
+        const denominador = firma[1] || 4;
+        const ticks = typeof entrada.ticks === "number" ? entrada.ticks : 0;
+        const time = typeof entrada.time === "number" ? entrada.time : ticks / ppq * (60 / bpm);
+        return {
+            time,
+            pulsos: Math.min(12, Math.max(1, Math.round(numerador))),
+            segundosPorPulso: (60 / bpm) * (4 / denominador)
+        };
+    }).sort((a, b) => a.time - b.time);
+    pulsosPorCompas = firmasCompas[0].pulsos;
+    segundosPorPulso = firmasCompas[0].segundosPorPulso;
 }
 
 function clicDeCompas(acentuado) {
@@ -2404,6 +2441,7 @@ function prepararEntradaKaraoke(idEjecucion) {
     }
     estadoKaraoke = "cuenta";
     notaEnJuicio = null;
+    restaurarCompasInicial();
     pulsoCompasMarcado = 0;
     actualizarLucesCompas();
     mostrarPalabraKaraoke(nota.palabraIndex);

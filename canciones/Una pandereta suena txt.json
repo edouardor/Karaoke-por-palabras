@@ -1,5 +1,9 @@
 {
   "titulo": "Una pandereta suena",
+  "coro": {
+    "tipo": "entradas",
+    "archivo": "Una pandereta suena coro.json"
+  },
   "lineas": [
     {
       "linea_completa": "Tran-tran,",

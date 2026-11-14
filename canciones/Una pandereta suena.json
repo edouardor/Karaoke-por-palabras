@@ -6,11 +6,28 @@
     "ppq": 480,
     "tempos": [
       {
-        "bpm": 80,
+        "bpm": 80.0,
         "ticks": 0
       }
     ],
-    "timeSignatures": []
+    "timeSignatures": [
+      {
+        "ticks": 0,
+        "timeSignature": [
+          3,
+          4
+        ],
+        "measures": 0
+      },
+      {
+        "ticks": 7200,
+        "timeSignature": [
+          2,
+          4
+        ],
+        "measures": 5
+      }
+    ]
   },
   "tracks": [
     {
