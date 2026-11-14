@@ -6,7 +6,7 @@
     "ppq": 480,
     "tempos": [
       {
-        "bpm": 80,
+        "bpm": 80.0,
         "ticks": 0
       }
     ],
@@ -15,7 +15,7 @@
         "ticks": 0,
         "timeSignature": [
           6,
-          3
+          8
         ],
         "measures": 0
       }

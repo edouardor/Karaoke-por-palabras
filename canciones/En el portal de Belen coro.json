@@ -1,0 +1,321 @@
+{
+  "voces": [
+    {
+      "time": 0.0,
+      "duration": 0.373437,
+      "midi": 67,
+      "name": "G4"
+    },
+    {
+      "time": 0.375,
+      "duration": 0.373437,
+      "midi": 67,
+      "name": "G4"
+    },
+    {
+      "time": 0.75,
+      "duration": 0.373437,
+      "midi": 67,
+      "name": "G4"
+    },
+    {
+      "time": 1.125,
+      "duration": 0.373437,
+      "midi": 67,
+      "name": "G4"
+    },
+    {
+      "time": 1.5,
+      "duration": 0.373437,
+      "midi": 69,
+      "name": "A4"
+    },
+    {
+      "time": 1.875,
+      "duration": 0.373437,
+      "midi": 71,
+      "name": "B4"
+    },
+    {
+      "time": 2.25,
+      "duration": 1.498437,
+      "midi": 72,
+      "name": "C5"
+    },
+    {
+      "time": 3.75,
+      "duration": 0.373437,
+      "midi": 71,
+      "name": "B4"
+    },
+    {
+      "time": 4.125,
+      "duration": 0.373437,
+      "midi": 69,
+      "name": "A4"
+    },
+    {
+      "time": 4.5,
+      "duration": 0.748437,
+      "midi": 67,
+      "name": "G4"
+    },
+    {
+      "time": 5.25,
+      "duration": 0.373437,
+      "midi": 64,
+      "name": "E4"
+    },
+    {
+      "time": 5.625,
+      "duration": 0.748437,
+      "midi": 65,
+      "name": "F4"
+    },
+    {
+      "time": 6.375,
+      "duration": 0.373437,
+      "midi": 69,
+      "name": "A4"
+    },
+    {
+      "time": 6.75,
+      "duration": 1.123437,
+      "midi": 67,
+      "name": "G4"
+    },
+    {
+      "time": 7.875,
+      "duration": 1.123437,
+      "midi": 64,
+      "name": "E4"
+    },
+    {
+      "time": 9.0,
+      "duration": 0.373437,
+      "midi": 67,
+      "name": "G4"
+    },
+    {
+      "time": 9.375,
+      "duration": 0.373437,
+      "midi": 67,
+      "name": "G4"
+    },
+    {
+      "time": 9.75,
+      "duration": 0.373437,
+      "midi": 67,
+      "name": "G4"
+    },
+    {
+      "time": 10.125,
+      "duration": 0.373437,
+      "midi": 67,
+      "name": "G4"
+    },
+    {
+      "time": 10.5,
+      "duration": 0.373437,
+      "midi": 69,
+      "name": "A4"
+    },
+    {
+      "time": 10.875,
+      "duration": 0.373437,
+      "midi": 71,
+      "name": "B4"
+    },
+    {
+      "time": 11.25,
+      "duration": 1.498437,
+      "midi": 72,
+      "name": "C5"
+    },
+    {
+      "time": 12.75,
+      "duration": 0.373437,
+      "midi": 71,
+      "name": "B4"
+    },
+    {
+      "time": 13.125,
+      "duration": 0.373437,
+      "midi": 69,
+      "name": "A4"
+    },
+    {
+      "time": 13.5,
+      "duration": 0.748437,
+      "midi": 67,
+      "name": "G4"
+    },
+    {
+      "time": 14.25,
+      "duration": 0.373437,
+      "midi": 64,
+      "name": "E4"
+    },
+    {
+      "time": 14.625,
+      "duration": 0.748437,
+      "midi": 65,
+      "name": "F4"
+    },
+    {
+      "time": 15.375,
+      "duration": 0.373437,
+      "midi": 69,
+      "name": "A4"
+    },
+    {
+      "time": 15.75,
+      "duration": 1.123437,
+      "midi": 67,
+      "name": "G4"
+    },
+    {
+      "time": 16.875,
+      "duration": 0.748437,
+      "midi": 64,
+      "name": "E4"
+    },
+    {
+      "time": 17.625,
+      "duration": 0.373437,
+      "midi": 67,
+      "name": "G4"
+    },
+    {
+      "time": 18.0,
+      "duration": 0.748437,
+      "midi": 71,
+      "name": "B4"
+    },
+    {
+      "time": 18.75,
+      "duration": 0.373437,
+      "midi": 67,
+      "name": "G4"
+    },
+    {
+      "time": 19.125,
+      "duration": 0.748437,
+      "midi": 71,
+      "name": "B4"
+    },
+    {
+      "time": 19.875,
+      "duration": 0.373437,
+      "midi": 67,
+      "name": "G4"
+    },
+    {
+      "time": 20.25,
+      "duration": 0.373437,
+      "midi": 72,
+      "name": "C5"
+    },
+    {
+      "time": 20.625,
+      "duration": 0.373437,
+      "midi": 72,
+      "name": "C5"
+    },
+    {
+      "time": 21.0,
+      "duration": 0.373437,
+      "midi": 72,
+      "name": "C5"
+    },
+    {
+      "time": 21.375,
+      "duration": 0.748437,
+      "midi": 72,
+      "name": "C5"
+    },
+    {
+      "time": 22.125,
+      "duration": 0.373437,
+      "midi": 67,
+      "name": "G4"
+    },
+    {
+      "time": 22.5,
+      "duration": 0.373437,
+      "midi": 71,
+      "name": "B4"
+    },
+    {
+      "time": 22.875,
+      "duration": 0.373437,
+      "midi": 71,
+      "name": "B4"
+    },
+    {
+      "time": 23.25,
+      "duration": 0.373437,
+      "midi": 71,
+      "name": "B4"
+    },
+    {
+      "time": 23.625,
+      "duration": 0.373437,
+      "midi": 71,
+      "name": "B4"
+    },
+    {
+      "time": 24.0,
+      "duration": 0.373437,
+      "midi": 71,
+      "name": "B4"
+    },
+    {
+      "time": 24.375,
+      "duration": 0.373437,
+      "midi": 67,
+      "name": "G4"
+    },
+    {
+      "time": 24.75,
+      "duration": 0.373437,
+      "midi": 69,
+      "name": "A4"
+    },
+    {
+      "time": 25.125,
+      "duration": 0.373437,
+      "midi": 67,
+      "name": "G4"
+    },
+    {
+      "time": 25.5,
+      "duration": 0.373437,
+      "midi": 65,
+      "name": "F4"
+    },
+    {
+      "time": 25.875,
+      "duration": 1.123437,
+      "midi": 64,
+      "name": "E4"
+    }
+  ],
+  "pasosBajos": [
+    0
+  ],
+  "inicio": 0,
+  "mensajeEspera": null,
+  "compas": {
+    "bpm": 80,
+    "firmas": [
+      {
+        "ticks": 0,
+        "timeSignature": [
+          6,
+          8
+        ]
+      }
+    ]
+  }
+}

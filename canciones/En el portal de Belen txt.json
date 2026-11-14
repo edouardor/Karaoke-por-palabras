@@ -1,5 +1,9 @@
 {
   "titulo": "En el portal de Belén",
+  "coro": {
+    "tipo": "entradas",
+    "archivo": "En el portal de Belen coro.json"
+  },
   "lineas": [
     {
       "linea_completa": "En el por-tal de-Be-lén",
