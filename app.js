@@ -99,6 +99,11 @@ let fuentesCoroActivas = [];             // notas de coro sonando a la vez
 let temporizadoresCoro = [];
 let eligioCoro = false;                  // karaoke en modo Coro en esta reproducción
 const VOLUMEN_CORO = 0.22;               // cada voz del coro, un poco por debajo de la melodía karaoke
+let estrofasSolo = [];                   // letras extra solo para karaoke Solo (misma melodía)
+let indiceEstrofaSolo = 0;
+let notasMelodiaCancion = [];            // notas crudas para rearmar sílabas al cambiar de estrofa
+let aciertosKaraokeSesion = 0;           // aciertos de estrofas ya cantadas en esta sesión
+let totalNotasKaraokeSesion = 0;
 
 function piezaConCoro(coro) {
     return !!(coro && (coro.tipo === "canon" || coro.tipo === "entradas"));
@@ -393,73 +398,14 @@ async function iniciarApp(modo = 'entrenamiento') {
         vocesCoro = [];
         eligioCoro = false;
 
-        let tAcumulado = 0;
-        let notasListaCompleta = notasRaw.map(n => {
-            let nombre = (typeof n === 'string') ? n : (n.name || n.note || n.pitch || "");
-            let duracion = (typeof n === 'object' && n.duration) ? n.duration : 0.4;
-            // Instante de inicio de la nota (si el JSON no lo trae, se encadenan las duraciones)
-            let tiempo = (typeof n === 'object' && typeof n.time === 'number') ? n.time : tAcumulado;
-            tAcumulado = tiempo + duracion;
-            let notaLimpia = nombre.replace(/[0-9]/g, '').trim();
-            const traducciones = {"C": "Do", "D": "Re", "E": "Mi", "F": "Fa", "G": "Sol", "A": "La", "B": "Si"};
-            let notaBase = notaLimpia.charAt(0).toUpperCase() + notaLimpia.slice(1);
-            return {
-                nombre: traducciones[notaBase.charAt(0)] ? traducciones[notaBase.charAt(0)] + notaBase.slice(1) : notaLimpia,
-                duracion: duracion,
-                tiempo: tiempo
-            };
-        }).filter(n => n.nombre !== "");
-
-        let notasContador = 0;
-        lineasLetra.forEach(linea => {
-            if (!linea.linea_completa) return;
-            let palabrasFrase = linea.linea_completa.split(/\s+/);
-            // Opcional: "texto_visible" = las palabras reales a mostrar (útil con melismas,
-            // p. ej. "ca-an-ti-co-rum" se muestra como "Canticorum")
-            const palabrasVisibles = (linea.texto_visible || "").split(/\s+/).filter(Boolean);
-            palabrasFrase.forEach((palBase, idxPalabra) => {
-                let palabraLimpia = palBase.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
-                let palabraMarcada = null;   // versión con (ayudas de pronunciación) entre paréntesis
-                if (palabrasVisibles.length === palabrasFrase.length) {
-                    const visible = palabrasVisibles[idxPalabra].replace(/_/g, " ");
-                    palabraLimpia = visible.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
-                    if (/\([^)]*\)/.test(visible)) {
-                        palabraMarcada = visible.replace(/[.,\/#!$%\^&\*;:{}=\-_`~]/g,"");
-                    }
-                }
-                let numeroSilabas = (palBase.match(/-/g) || []).length + 1;
-                let silabasLista = palBase.replace(/[.,\/#!$%\^&\*;:{}=_`~()]/g,"").split("-");
-                
-                let notasDeEstaPalabra = [];
-                let notasInglesDeEstaPalabra = [];
-                let duracionesDeEstaPalabra = [];
-                let silabasDeEstaPalabra = [];
-                let tiemposDeEstaPalabra = [];
-                
-                for (let i = 0; i < numeroSilabas; i++) {
-                    if (notasListaCompleta[notasContador]) {
-                        notasDeEstaPalabra.push(notasListaCompleta[notasContador].nombre);
-                        notasInglesDeEstaPalabra.push(notasRaw[notasContador].name || notasRaw[notasContador].note || "D4");
-                        duracionesDeEstaPalabra.push(notasListaCompleta[notasContador].duracion);
-                        tiemposDeEstaPalabra.push(notasListaCompleta[notasContador].tiempo);
-                        silabasDeEstaPalabra.push(silabasLista[i] || "...");
-                        notasContador++;
-                    }
-                }
-                
-                if (notasDeEstaPalabra.length > 0) {
-                    FRASES_JUEGO.push({
-                        palabra: palabraLimpia,
-                        palabraMarcada: palabraMarcada,
-                        notes: notasDeEstaPalabra,
-                        notesIngles: notasInglesDeEstaPalabra,
-                        duraciones: duracionesDeEstaPalabra,
-                        tiempos: tiemposDeEstaPalabra,
-                        silabas: silabasDeEstaPalabra
-                    });
-                }
-            });
-        });
+        notasMelodiaCancion = Array.isArray(notasRaw) ? notasRaw.slice() : [];
+        estrofasSolo = Array.isArray(datosTexto.estrofasSolo) && datosTexto.estrofasSolo.length
+            ? datosTexto.estrofasSolo.filter(e => Array.isArray(e) && e.length)
+            : [];
+        indiceEstrofaSolo = 0;
+        aciertosKaraokeSesion = 0;
+        totalNotasKaraokeSesion = 0;
+        FRASES_JUEGO = armarFrasesDesdeLineas(lineasLetra, notasMelodiaCancion);
 
         if (FRASES_JUEGO.length === 0) throw new Error("No se encontraron palabras en la canción.");
 
@@ -614,6 +560,12 @@ function cargarNuevaFrasePalabra(sinGuia = false) {
     actualizarFlechas();
 
     if (fraseActualIndex >= FRASES_JUEGO.length) {
+        if (cargarSiguienteEstrofaSolo()) {
+            tiemposPalabras = {};
+            fraseActualIndex = 0;
+            cargarNuevaFrasePalabra(sinGuia);
+            return;
+        }
         document.getElementById('palabra-pantalla').innerText = "🎉 ¡COMPLETADO!";
         document.getElementById('secuencia-visual').innerHTML = "";
         document.getElementById('evaluacion').innerHTML = "<span class='success'>Pieza terminada. Buen trabajo.</span>";
@@ -1032,7 +984,7 @@ function avanzarNotaEntrenamiento() {
         if (repasoActivo) {
             repasoActivo = false;
             fraseActualIndex = FRASES_JUEGO.length;
-        } else if (fraseActualIndex >= FRASES_JUEGO.length) {
+        } else if (fraseActualIndex >= FRASES_JUEGO.length && !haySiguienteEstrofaSolo()) {
             anotarCancionEstudiadaHoy();
         }
         ultimaNotaValidadaTexto = "";
@@ -1666,11 +1618,27 @@ function armarVocesCoro(notasBase, config) {
     if (!config) return [];
     if (config.tipo === "entradas") {
         const lista = (datosCoroEntradas && datosCoroEntradas.voces) || [];
-        return lista.map(n => ({
+        const base = lista.map(n => ({
             time: n.time,
             duracion: n.duration || n.duracion || 0.4,
             nombre: n.name || n.nombre || nombreInglesDesdeMidi(n.midi)
         }));
+        const pasadas = datosCoroEntradas && datosCoroEntradas.pasadas;
+        if (!Array.isArray(pasadas) || !pasadas.length) return base;
+        const sueltos = [];
+        pasadas.forEach(p => {
+            if (!p.sopranos) return;
+            const offset = typeof p.offset === "number" ? p.offset : 0;
+            base.forEach(n => {
+                sueltos.push({
+                    time: n.time + offset,
+                    duracion: n.duracion,
+                    nombre: n.nombre
+                });
+            });
+        });
+        sueltos.sort((a, b) => a.time - b.time);
+        return sueltos;
     }
     if (config.tipo !== "canon" || !notasBase.length) return [];
     const retraso = config.retraso || 0;
@@ -1962,6 +1930,10 @@ function reproducirPalabraEscucha(idEjecucion) {
     limpiarSilencioEscucha();               // si veníamos de un silencio, se quita el aviso
 
     if (fraseActualIndex >= FRASES_JUEGO.length) {
+        if (cargarSiguienteEstrofaSolo()) {
+            iniciarEscuchaDesde(0);
+            return;
+        }
         terminarEscucha();
         return;
     }
@@ -2064,6 +2036,11 @@ function terminarEscucha() {
     silenciarSonidoEscucha();
     limpiarSilencioEscucha();
     estadoEscucha = 'fin';
+    // Tras todas las estrofas, la repetición vuelve a la primera letra.
+    if (estrofasSolo.length) {
+        indiceEstrofaSolo = 0;
+        FRASES_JUEGO = armarFrasesDesdeLineas(estrofasSolo[0], notasMelodiaCancion);
+    }
     fraseActualIndex = 0;                   // "volver a escuchar" y "entrenar" parten del principio
     palabraMostradaIndex = FRASES_JUEGO.length;   // la flecha ◀ lleva a la última palabra
     actualizarFlechas();
@@ -2128,7 +2105,133 @@ async function pasarAEntrenamiento() {
 // La melodía suena seguida, con el ritmo del MIDI, sin esperar a que se cante.
 // Cada nota cuenta como acierto si, mientras suena, la voz entra en la tolerancia.
 
+function armarFrasesDesdeLineas(lineasLetra, notasRaw) {
+    let tAcumulado = 0;
+    const notasListaCompleta = (notasRaw || []).map(n => {
+        let nombre = (typeof n === 'string') ? n : (n.name || n.note || n.pitch || "");
+        let duracion = (typeof n === 'object' && n.duration) ? n.duration : 0.4;
+        let tiempo = (typeof n === 'object' && typeof n.time === 'number') ? n.time : tAcumulado;
+        tAcumulado = tiempo + duracion;
+        let notaLimpia = nombre.replace(/[0-9]/g, '').trim();
+        const traducciones = {"C": "Do", "D": "Re", "E": "Mi", "F": "Fa", "G": "Sol", "A": "La", "B": "Si"};
+        let notaBase = notaLimpia.charAt(0).toUpperCase() + notaLimpia.slice(1);
+        return {
+            nombre: traducciones[notaBase.charAt(0)] ? traducciones[notaBase.charAt(0)] + notaBase.slice(1) : notaLimpia,
+            duracion: duracion,
+            tiempo: tiempo
+        };
+    }).filter(n => n.nombre !== "");
+
+    const frases = [];
+    let notasContador = 0;
+    (lineasLetra || []).forEach(linea => {
+        if (!linea.linea_completa) return;
+        let palabrasFrase = linea.linea_completa.split(/\s+/);
+        const palabrasVisibles = (linea.texto_visible || "").split(/\s+/).filter(Boolean);
+        palabrasFrase.forEach((palBase, idxPalabra) => {
+            let palabraLimpia = palBase.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
+            let palabraMarcada = null;
+            if (palabrasVisibles.length === palabrasFrase.length) {
+                const visible = palabrasVisibles[idxPalabra].replace(/_/g, " ");
+                palabraLimpia = visible.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
+                if (/\([^)]*\)/.test(visible)) {
+                    palabraMarcada = visible.replace(/[.,\/#!$%\^&\*;:{}=\-_`~]/g,"");
+                }
+            }
+            let numeroSilabas = (palBase.match(/-/g) || []).length + 1;
+            let silabasLista = palBase.replace(/[.,\/#!$%\^&\*;:{}=_`~()]/g,"").split("-");
+
+            let notasDeEstaPalabra = [];
+            let notasInglesDeEstaPalabra = [];
+            let duracionesDeEstaPalabra = [];
+            let silabasDeEstaPalabra = [];
+            let tiemposDeEstaPalabra = [];
+
+            for (let i = 0; i < numeroSilabas; i++) {
+                if (notasListaCompleta[notasContador]) {
+                    notasDeEstaPalabra.push(notasListaCompleta[notasContador].nombre);
+                    notasInglesDeEstaPalabra.push(notasRaw[notasContador].name || notasRaw[notasContador].note || "D4");
+                    duracionesDeEstaPalabra.push(notasListaCompleta[notasContador].duracion);
+                    tiemposDeEstaPalabra.push(notasListaCompleta[notasContador].tiempo);
+                    silabasDeEstaPalabra.push(silabasLista[i] || "...");
+                    notasContador++;
+                }
+            }
+
+            if (notasDeEstaPalabra.length > 0) {
+                frases.push({
+                    palabra: palabraLimpia,
+                    palabraMarcada: palabraMarcada,
+                    notes: notasDeEstaPalabra,
+                    notesIngles: notasInglesDeEstaPalabra,
+                    duraciones: duracionesDeEstaPalabra,
+                    tiempos: tiemposDeEstaPalabra,
+                    silabas: silabasDeEstaPalabra
+                });
+            }
+        });
+    });
+    return frases;
+}
+
+function construirLineaKaraokeCoroPasadas() {
+    const pasadas = datosCoroEntradas.pasadas;
+    notasLineaKaraoke = [];
+    const frasesAcumuladas = [];
+    let indicePasadaBajos = 0;
+    pasadas.forEach(p => {
+        if (!p.bajos) return;
+        const offset = typeof p.offset === "number" ? p.offset : 0;
+        const idxEstrofa = typeof p.estrofa === "number" ? p.estrofa : 0;
+        const lineas = (estrofasSolo[idxEstrofa] && estrofasSolo[idxEstrofa].length)
+            ? estrofasSolo[idxEstrofa]
+            : null;
+        const frases = lineas
+            ? armarFrasesDesdeLineas(lineas, notasMelodiaCancion)
+            : FRASES_JUEGO.map(f => ({
+                palabra: f.palabra,
+                palabraMarcada: f.palabraMarcada,
+                notes: f.notes.slice(),
+                notesIngles: f.notesIngles.slice(),
+                duraciones: f.duraciones.slice(),
+                tiempos: f.tiempos.slice(),
+                silabas: f.silabas.slice()
+            }));
+        const baseIdx = frasesAcumuladas.length;
+        frases.forEach((palabra, iPalabra) => {
+            frasesAcumuladas.push({
+                palabra: palabra.palabra,
+                palabraMarcada: palabra.palabraMarcada,
+                notes: palabra.notes.slice(),
+                notesIngles: palabra.notesIngles.slice(),
+                duraciones: palabra.duraciones.slice(),
+                tiempos: palabra.tiempos.map(t => t + offset),
+                silabas: palabra.silabas.slice()
+            });
+            palabra.notesIngles.forEach((ingles, indiceNota) => {
+                notasLineaKaraoke.push({
+                    palabraIndex: baseIdx + iPalabra,
+                    notaIndex: indiceNota,
+                    tiempo: palabra.tiempos[indiceNota] + offset,
+                    duracion: palabra.duraciones[indiceNota] || 0.4,
+                    ingles,
+                    nombre: palabra.notes[indiceNota],
+                    pasada: indicePasadaBajos,
+                    acertada: false,
+                    juzgada: false
+                });
+            });
+        });
+        indicePasadaBajos++;
+    });
+    FRASES_JUEGO = frasesAcumuladas;
+}
+
 function construirLineaKaraoke() {
+    if (eligioCoro && datosCoroEntradas && Array.isArray(datosCoroEntradas.pasadas) && datosCoroEntradas.pasadas.length) {
+        construirLineaKaraokeCoroPasadas();
+        return;
+    }
     const pasos = pasosDesplazamientoBajos();
     notasLineaKaraoke = [];
     pasos.forEach((offset, pasada) => {
@@ -2308,8 +2411,11 @@ function mostrarSilencioKaraoke(tiempoSiguiente, siguienteNota) {
     pantalla.className = "palabra-actual silencio";
     let aviso = "🤫 Aquí no cantamos";
     if (eligioCoro && configCoro) {
-        if (siguienteNota === notasLineaKaraoke[0] && configCoro.mensajeEspera) {
-            aviso = `🤫 ${configCoro.mensajeEspera}`;
+        const mensajeCoro = (datosCoroEntradas && datosCoroEntradas.mensajeEspera) || configCoro.mensajeEspera;
+        if (siguienteNota === notasLineaKaraoke[0] && mensajeCoro) {
+            aviso = `🤫 ${mensajeCoro}`;
+        } else if (datosCoroEntradas && Array.isArray(datosCoroEntradas.pasadas) && mensajeCoro) {
+            aviso = `🤫 ${mensajeCoro}`;
         } else if (configCoro.tipo === "entradas" && siguienteNota.pasada === 1) {
             aviso = "🤫 Esperamos a las contraltos";
         }
@@ -2504,8 +2610,31 @@ function pulsarCuentaKaraoke(idEjecucion, numero) {
     programarPasoCuenta(segundosPorPulso * 1000 / velocidadKaraoke, () => pulsarCuentaKaraoke(idEjecucion, numero - 1), idEjecucion);
 }
 
-function iniciarKaraokeDesde(indicePalabra) {
+function haySiguienteEstrofaSolo() {
+    if (modoKaraoke && eligioCoro) return false;
+    return estrofasSolo.length > 1 && indiceEstrofaSolo + 1 < estrofasSolo.length;
+}
+
+function cargarSiguienteEstrofaSolo() {
+    if (!haySiguienteEstrofaSolo()) return false;
+    indiceEstrofaSolo++;
+    FRASES_JUEGO = armarFrasesDesdeLineas(estrofasSolo[indiceEstrofaSolo], notasMelodiaCancion);
+    fraseActualIndex = 0;
+    return FRASES_JUEGO.length > 0;
+}
+
+function iniciarKaraokeDesde(indicePalabra, opciones) {
     cancelarTemporizadores();
+    const seguirEstrofa = !!(opciones && opciones.seguirEstrofa);
+    const sinCuenta = !!(opciones && opciones.sinCuenta);
+    if (!seguirEstrofa) {
+        indiceEstrofaSolo = 0;
+        aciertosKaraokeSesion = 0;
+        totalNotasKaraokeSesion = 0;
+        if (!eligioCoro && estrofasSolo.length) {
+            FRASES_JUEGO = armarFrasesDesdeLineas(estrofasSolo[0], notasMelodiaCancion);
+        }
+    }
     if (!FRASES_JUEGO.length) return;
 
     construirLineaKaraoke();
@@ -2517,7 +2646,7 @@ function iniciarKaraokeDesde(indicePalabra) {
     }
 
     modoKaraoke = true;
-    estadoKaraoke = "cuenta";
+    estadoKaraoke = sinCuenta ? "reproduciendo" : "cuenta";
     cuentaKaraokePendiente = false;
     fraseActualIndex = notasLineaKaraoke[indiceNotaKaraoke].palabraIndex;
     document.getElementById('zona-reinicio').style.display = 'none';
@@ -2528,7 +2657,7 @@ function iniciarKaraokeDesde(indicePalabra) {
     palabraMostradaIndex = -1;             // obliga a dibujar la primera palabra
     idGuia++;
     document.getElementById("btn-volver-calentamiento").hidden = !esCalentamiento(cancionActual);
-    if (esCalentamiento(cancionActual)) {
+    if (esCalentamiento(cancionActual) || sinCuenta) {
         comenzarReproduccionKaraoke(idGuia);
         return;
     }
@@ -2576,12 +2705,25 @@ function terminarKaraoke() {
     cancelarAcompanamiento();
     limpiarSilencioEscucha();
     silenciarSonidoEscucha();
+    silenciarVocesCoro();
     notaEnJuicio = null;
+
+    // Solo: tras la 1ª estrofa, misma melodía con la 2ª letra desde el principio (sin cuenta ni tono).
+    if (haySiguienteEstrofaSolo()) {
+        aciertosKaraokeSesion += aciertosKaraoke;
+        totalNotasKaraokeSesion += notasLineaKaraoke.length;
+        if (cargarSiguienteEstrofaSolo()) {
+            iniciarKaraokeDesde(0, { seguirEstrofa: true, sinCuenta: true });
+            return;
+        }
+    }
+
     estadoKaraoke = 'fin';
 
-    const total = notasLineaKaraoke.length;
-    const promedio = total ? Math.round((aciertosKaraoke * 100) / total) : 0;
-    anotarCancionEstudiadaHoy({ aciertos: aciertosKaraoke, total, promedio });
+    const aciertos = aciertosKaraokeSesion + aciertosKaraoke;
+    const total = totalNotasKaraokeSesion + notasLineaKaraoke.length;
+    const promedio = total ? Math.round((aciertos * 100) / total) : 0;
+    anotarCancionEstudiadaHoy({ aciertos, total, promedio });
     document.getElementById('palabra-pantalla').innerText = "🎉 Karaoke";
     document.getElementById('secuencia-visual').innerHTML = "";
 
@@ -2591,8 +2733,8 @@ function terminarKaraoke() {
     const logro = document.createElement('div');
     logro.className = 'resumen-logro';
     logro.innerText = total === 1
-        ? `Has acertado ${aciertosKaraoke} de 1 nota.`
-        : `Has acertado ${aciertosKaraoke} de ${total} notas.`;
+        ? `Has acertado ${aciertos} de 1 nota.`
+        : `Has acertado ${aciertos} de ${total} notas.`;
     resumen.appendChild(logro);
 
     const cifra = document.createElement('div');

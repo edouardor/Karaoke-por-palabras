@@ -2,7 +2,8 @@
   "titulo": "En el portal de Belén",
   "coro": {
     "tipo": "entradas",
-    "archivo": "En el portal de Belen coro.json"
+    "archivo": "En el portal de Belen coro.json",
+    "mensajeEspera": "Escuchamos a las sopranos"
   },
   "lineas": [
     {
@@ -112,5 +113,226 @@
         "bien"
       ]
     }
+  ],
+  "estrofasSolo": [
+    [
+      {
+        "linea_completa": "En el por-tal de-Be-lén",
+        "silabas": [
+          "En",
+          "el",
+          "por",
+          "tal",
+          "de",
+          "Be",
+          "lén"
+        ],
+        "texto_visible": "En el portal de_Belén"
+      },
+      {
+        "linea_completa": "hay-un ar-ca chi-qui-ti-i-ta",
+        "silabas": [
+          "hay",
+          "un",
+          "ar",
+          "ca",
+          "chi",
+          "qui",
+          "ti",
+          "i",
+          "ta"
+        ],
+        "texto_visible": "hay_un arca chiquitita"
+      },
+      {
+        "linea_completa": "don-de se-vis-tel Se-ñor",
+        "silabas": [
+          "don",
+          "de",
+          "se",
+          "vis",
+          "tel",
+          "Se",
+          "ñor"
+        ],
+        "texto_visible": "donde se_viste_el Señor"
+      },
+      {
+        "linea_completa": "Pa-ra sa-lir de vi-si-i-ta",
+        "silabas": [
+          "Pa",
+          "ra",
+          "sa",
+          "lir",
+          "de",
+          "vi",
+          "si",
+          "i",
+          "ta"
+        ],
+        "texto_visible": "Para salir de visita"
+      },
+      {
+        "linea_completa": "Can-tad pas-tor-ci-tos",
+        "silabas": [
+          "Can",
+          "tad",
+          "pas",
+          "tor",
+          "ci",
+          "tos"
+        ],
+        "texto_visible": "Cantad pastorcitos"
+      },
+      {
+        "linea_completa": "can-tad en-Be-lén",
+        "silabas": [
+          "can",
+          "tad",
+          "en",
+          "Be",
+          "lén"
+        ],
+        "texto_visible": "cantad en_Belén"
+      },
+      {
+        "linea_completa": "que-Dios-ha na-ci-do",
+        "silabas": [
+          "que",
+          "Dios",
+          "ha",
+          "na",
+          "ci",
+          "do"
+        ],
+        "texto_visible": "que_Dios_ha nacido"
+      },
+      {
+        "linea_completa": "pa-ra-nues-tro",
+        "silabas": [
+          "pa",
+          "ra",
+          "nues",
+          "tro"
+        ],
+        "texto_visible": "para_nuestro"
+      },
+      {
+        "linea_completa": "bien.",
+        "silabas": [
+          "bien"
+        ]
+      }
+    ],
+    [
+      {
+        "linea_completa": "En el por-tal de-Be-lén",
+        "texto_visible": "En el portal de_Belén",
+        "silabas": [
+          "En",
+          "el",
+          "por",
+          "tal",
+          "de",
+          "Be",
+          "lén"
+        ]
+      },
+      {
+        "linea_completa": "hay-es-tre-llas sol y-lu-u-na",
+        "texto_visible": "hay_estrellas sol y_luna",
+        "silabas": [
+          "hay",
+          "es",
+          "tre",
+          "llas",
+          "sol",
+          "y",
+          "lu",
+          "u",
+          "na"
+        ]
+      },
+      {
+        "linea_completa": "la Vir-gen y-San-Jo-sé",
+        "texto_visible": "la Virgen y_San_José",
+        "silabas": [
+          "la",
+          "Vir",
+          "gen",
+          "y",
+          "San",
+          "Jo",
+          "sé"
+        ]
+      },
+      {
+        "linea_completa": "yel-ni-ño ques-táen la-cu-u-na",
+        "texto_visible": "y_el_niño que_está_en la_cuna",
+        "silabas": [
+          "yel",
+          "ni",
+          "ño",
+          "ques",
+          "táen",
+          "la",
+          "cu",
+          "u",
+          "na"
+        ]
+      },
+      {
+        "linea_completa": "Can-tad pas-tor-ci-tos",
+        "texto_visible": "Cantad pastorcitos",
+        "silabas": [
+          "Can",
+          "tad",
+          "pas",
+          "tor",
+          "ci",
+          "tos"
+        ]
+      },
+      {
+        "linea_completa": "can-tad en-Be-lén",
+        "texto_visible": "cantad en_Belén",
+        "silabas": [
+          "can",
+          "tad",
+          "en",
+          "Be",
+          "lén"
+        ]
+      },
+      {
+        "linea_completa": "que-Dios-ha na-ci-do",
+        "texto_visible": "que_Dios_ha nacido",
+        "silabas": [
+          "que",
+          "Dios",
+          "ha",
+          "na",
+          "ci",
+          "do"
+        ]
+      },
+      {
+        "linea_completa": "pa-ra-nues-tro",
+        "texto_visible": "para_nuestro",
+        "silabas": [
+          "pa",
+          "ra",
+          "nues",
+          "tro"
+        ]
+      },
+      {
+        "linea_completa": "bien.",
+        "texto_visible": "bien.",
+        "silabas": [
+          "bien"
+        ]
+      }
+    ]
   ]
 }

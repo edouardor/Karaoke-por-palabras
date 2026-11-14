@@ -301,11 +301,47 @@
       "name": "E4"
     }
   ],
+  "ciclo": 27.0,
+  "pasadas": [
+    {
+      "offset": 0.0,
+      "bajos": true,
+      "sopranos": false,
+      "estrofa": 0
+    },
+    {
+      "offset": 27.0,
+      "bajos": true,
+      "sopranos": true,
+      "estrofa": 0
+    },
+    {
+      "offset": 54.0,
+      "bajos": false,
+      "sopranos": true,
+      "estrofa": 1
+    },
+    {
+      "offset": 81.0,
+      "bajos": true,
+      "sopranos": true,
+      "estrofa": 1
+    },
+    {
+      "offset": 108.0,
+      "bajos": true,
+      "sopranos": true,
+      "estrofa": 0
+    }
+  ],
   "pasosBajos": [
-    0
+    0.0,
+    27.0,
+    81.0,
+    108.0
   ],
   "inicio": 0,
-  "mensajeEspera": null,
+  "mensajeEspera": "Escuchamos a las sopranos",
   "compas": {
     "bpm": 80,
     "firmas": [
