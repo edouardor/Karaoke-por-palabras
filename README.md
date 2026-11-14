@@ -4,7 +4,7 @@ Browser app for choir practice. It plays the **bass line** as a piano guide, lis
 
 **Live site:** [edouardor.github.io/Karaoke-por-palabras](https://edouardor.github.io/Karaoke-por-palabras/)
 
-The interface is in Spanish. This README is in English.
+The interface is in Spanish. 
 
 ## What it is
 
