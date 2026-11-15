@@ -4,16 +4,18 @@ Browser app for choir practice. It plays the **bass line** as a piano guide, lis
 
 **Live site:** [edouardor.github.io/Karaoke-por-palabras](https://edouardor.github.io/Karaoke-por-palabras/)
 
-The interface is in Spanish. 
+The interface is in Spanish.
 
 ## What it is
 
 - Word-by-word practice for Christmas and choir repertoire (bass part).
-- Pitch checking in real time (no need to sing the lyric: humming or singing the note name also works).
-- Three ways to work: listen only, guided training, or continuous karaoke.
-- Optional **Solo / Choir** karaoke for pieces that have other voices (for example Venid as a canon, or Salta Navideña with staggered entries).
+- Pitch checking in real time (humming or singing the note name also works).
+- Three practice modes: listen only, guided training, or continuous karaoke.
+- Optional **Solo / Choir** karaoke when a piece has other voices (canon or staggered entries).
 - Warm-up exercises before singing the songs.
+- **Games** under **Juegos**: Rhythm (timing) and Bird (pitch), with scores logged in “songs studied today”.
 - Piano samples for the melody (and choir voices when Coro is on).
+- Test pieces with free starting pitch: **Cumpleaños Feliz** and **Frère Jacques**.
 
 ## How to use
 
@@ -27,14 +29,41 @@ The interface is in Spanish.
    - **Modo entrenamiento** — hear a guide for the word, then sing. Each cell is one note; it turns green when you are in tune. Arrows (or ← →) change word. Tap a cell to hear that note and restart the word from there. After about one second stuck on a note, the border turns white: tap it to hear what you sang and then the correct note.
    - **Modo karaoke** — pitch reference + one-bar count-in, then the melody runs on its own while you sing along. Notes score green if you match them in time. You can change playback speed. Headphones help so the speaker does not fool the mic.
 7. On pieces that support it, choose **Solo** or **Coro** before karaoke:
-   - **Solo** — bass line only (what you sing).
+   - **Solo** — bass line only (what you sing). Some pieces add a second verse with the same melody.
    - **Coro** — you still only see and sing the bass part, but you also hear the other voices. You may wait while sopranos (and later other parts) enter first.
+
+### Games (Juegos)
+
+Open **Juegos** from the home screen.
+
+#### 1 — Rhythm
+
+Tap along with a piece **without the microphone**: only attack timing and hold duration are scored. The melody sounds only while you hold.
+
+- Choose a piece (same list as the main menu, including Frère Jacques).
+- One-bar count-in; optional metronome.
+- Tap the screen or the space bar on each note and **hold** for its length.
+- Starts at **×0.6** of the score tempo; you can change speed, pause, and resume.
+- Pieces with a **pickup** (anacrusis) hide the lyric until that beat and show **Espera al tiempo N** (for example *Gia la notte* waits for beat 4 in 6/8).
+- Pieces that start on the downbeat get a short prep pulse after the count “1” so the first note is easier to catch.
+- Tempo changes such as ritardandos are ignored in Rhythm so the click stays steady.
+- At the end you see % good for **moment** and **duration**; the run is added to today’s activity log.
+
+#### 2 — Bird
+
+A bird moves up and down with your **sung pitch** and must catch cherries placed at each note height. Syllables appear under the cherries.
+
+- Choose a piece. **Test pieces** (Cumpleaños Feliz, Frère Jacques): sing a comfortable starting note; the melody is transposed to it. Other pieces: you hear the first note as in karaoke, then play.
+- Cherries move from the right; the note sounds only when you catch a cherry.
+- Starts at **×0.6** speed; pause, resume, and replay like Rhythm.
+- Score (cherries caught) goes into today’s activity log.
 
 ### Tips
 
 - Warm up before the songs so the voice is ready and less forced.
 - On a computer, headphones avoid the piano feeding back into the mic.
 - Do not force the voice; if it feels tense, stop, listen again, then retry.
+- Use **Canciones estudiadas hoy** to see what you practiced (songs and games) during the day.
 
 ## Run locally
 
@@ -51,9 +80,10 @@ Then open `http://127.0.0.1:8765/`.
 | Path | Role |
 | --- | --- |
 | `index.html` | UI |
-| `app.js` | Pitch detection, modes, piano/choir playback |
-| `styles.css` | Layout and note cells |
+| `app.js` | Pitch detection, modes, games, piano/choir playback |
+| `styles.css` | Layout, note cells, Rhythm and Bird screens |
 | `canciones/` | Song JSON (melody) + lyric JSON; some pieces also have a `* coro.json` |
+| `imagenes/` | Game icons (e.g. snare for Rhythm) |
 | `sonidos/piano/` | Acoustic piano samples |
 
-Songs are plain JSON (Tone.js-style MIDI export + hyphenated lyrics). Warm-ups are opened from the Calentamiento menu, not from the main song list.
+Songs are plain JSON (Tone.js-style MIDI export + hyphenated lyrics). Warm-ups are opened from the Calentamiento menu, not from the main song list. Games reuse the same song files; Frère Jacques is a shared test piece in every selector.
