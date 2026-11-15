@@ -61,6 +61,26 @@ const VOLUMEN_MELODIA_GUIA = 1.15;        // entrenamiento y escucha
 const UMBRAL_SILENCIO_ESCUCHA = 3;       // segundos: a partir de aquí se avisa "Aquí no cantamos"
 let modoEscucha = false;                 // true mientras se está en el modo escucha
 let estadoEscucha = 'reproduciendo';     // 'reproduciendo' | 'pausada' | 'fin'
+// ---- Juego de ritmo: como escucha, pero el sonido solo al pulsar ----
+let modoRitmo = false;
+let estadoRitmo = 'fin';                 // 'cuenta' | 'reproduciendo' | 'fin'
+let notasRitmo = [];
+let indiceNotaRitmo = 0;
+let relojRitmo = { t0: 0, tiempoBase: 0 };
+let pulsacionRitmo = null;               // { inicioMs, notaIndex, tecla }
+let animacionRitmoId = 0;
+let listenersRitmoActivos = false;
+let aciertosMomentoRitmo = 0;
+let aciertosDuracionRitmo = 0;
+let notasJuzgadasRitmo = 0;
+const RITMO_VENTANA_BIEN = 0.12;         // s: ataque muy bueno
+const RITMO_VENTANA_OK = 0.25;           // s: ataque aceptable
+const RITMO_VENTANA_PRIMERA = 0.42;      // 1ª nota tras la cuenta: más margen
+const RITMO_DURACION_BIEN = 0.25;        // error relativo de duración
+const RITMO_DURACION_OK = 0.45;
+let metronomoRitmoActivo = true;         // clic de compás audible por defecto
+let ultimoBeatMetronomoRitmo = -999;     // índice de pulso musical (puede ser negativo)
+let velocidadRitmo = 1;                  // 1 = tempo de la partitura
 // ---- Modo karaoke: la melodía sigue sola y se puntúan las notas al vuelo ----
 let modoKaraoke = false;
 let estadoKaraoke = 'reproduciendo';     // 'cuenta' | 'reproduciendo' | 'pausada' | 'fin'
@@ -179,6 +199,7 @@ function leerCancionesHoy() {
 function anotarCancionEstudiadaHoy(puntuacionKaraoke) {
     const piezas = leerCancionesHoy();
     const pieza = {
+        tipo: "cancion",
         titulo: tituloCancionActual || cancionActual,
         exigencia: exigenciaUsada || etiquetaDificultad(toleranciaCentsConfigurada)
     };
@@ -189,8 +210,30 @@ function anotarCancionEstudiadaHoy(puntuacionKaraoke) {
     } catch (e) { /* si el navegador no guarda, la lista de esta sesión no sobrevive al recargar */ }
 }
 
+function anotarJuegoHoy(nombreJuego, puntuacion) {
+    const piezas = leerCancionesHoy();
+    const pieza = {
+        tipo: "juego",
+        juego: nombreJuego || "Ritmo",
+        titulo: tituloCancionActual || cancionActual
+    };
+    if (puntuacion) pieza.puntuacion = puntuacion;
+    piezas.push(pieza);
+    try {
+        localStorage.setItem(CLAVE_ESTUDIO_HOY, JSON.stringify({ fecha: fechaHoy(), piezas }));
+    } catch (e) { /* si el navegador no guarda, la lista de esta sesión no sobrevive al recargar */ }
+}
+
 function textoPiezaEstudiada(pieza) {
-    let texto = `${pieza.titulo} — ${pieza.exigencia}`;
+    if (pieza.tipo === "juego") {
+        let texto = `Juego ${pieza.juego || "Ritmo"} — ${pieza.titulo || "pieza"}`;
+        const p = pieza.puntuacion || {};
+        if (typeof p.momento === "number" && typeof p.duracion === "number") {
+            texto += ` — momento ${p.momento}% · duración ${p.duracion}%`;
+        }
+        return texto;
+    }
+    let texto = `${pieza.titulo} — ${pieza.exigencia || ""}`;
     if (pieza.karaoke && typeof pieza.karaoke.promedio === "number") {
         texto += ` — Karaoke ${pieza.karaoke.promedio}%`;
         if (typeof pieza.karaoke.aciertos === "number" && typeof pieza.karaoke.total === "number") {
@@ -209,10 +252,24 @@ function abrirCancionesHoy() {
         item.textContent = textoPiezaEstudiada(pieza);
         lista.appendChild(item);
     });
+    const titulo = document.getElementById('titulo-canciones-hoy');
     const enhorabuena = document.getElementById('enhorabuena-hoy');
-    enhorabuena.textContent = piezas.length === 1
-        ? "Enhorabuena por el trabajo realizado hoy. Has estudiado una pieza."
-        : `Enhorabuena por el trabajo realizado hoy. Has estudiado ${piezas.length} piezas.`;
+    const canciones = piezas.filter(p => p.tipo !== "juego").length;
+    const juegos = piezas.filter(p => p.tipo === "juego").length;
+    if (piezas.length === 0) {
+        if (titulo) titulo.textContent = "Hoy";
+        enhorabuena.textContent = "Hoy no ha podido ser, mañana será otro día.";
+    } else {
+        if (titulo) titulo.textContent = "Enhorabuena";
+        const partes = [];
+        if (canciones === 1) partes.push("1 pieza");
+        else if (canciones > 1) partes.push(`${canciones} piezas`);
+        if (juegos === 1) partes.push("1 juego");
+        else if (juegos > 1) partes.push(`${juegos} juegos`);
+        enhorabuena.textContent = partes.length
+            ? `Enhorabuena por el trabajo realizado hoy. Has hecho ${partes.join(" y ")}.`
+            : "Enhorabuena por el trabajo realizado hoy.";
+    }
     document.getElementById('canciones-hoy').showModal();
 }
 
@@ -339,6 +396,8 @@ async function iniciarApp(modo = 'entrenamiento') {
         document.getElementById('zona-seleccion').style.display = 'none';
         document.getElementById('zona-reinicio').style.display = 'none';
         document.getElementById('status-box').style.display = 'block';
+        const btnVolverRitmo = document.getElementById('btn-volver-ritmo');
+        if (btnVolverRitmo) btnVolverRitmo.hidden = modo !== 'ritmo';
 
         const [resNotas, resTexto] = await Promise.all([
             cargarArchivoCancion(`${cancionSeleccionada}.json`),
@@ -411,12 +470,13 @@ async function iniciarApp(modo = 'entrenamiento') {
 
         await cargarPiano();
 
-        // ----- MODO ESCUCHA SOLO: no hace falta micrófono -----
-        if (modo === 'escucha') {
+        // ----- MODO ESCUCHA o RITMO: no hace falta micrófono -----
+        if (modo === 'escucha' || modo === 'ritmo') {
             soltarMicrofono();
             asegurarAudioContext();
             if (audioContext.state === 'suspended') await audioContext.resume();
-            iniciarEscuchaDesde(0);
+            if (modo === 'ritmo') iniciarJuegoRitmo();
+            else iniciarEscuchaDesde(0);
             if (!bucleAudioActivo) {
                 bucleAudioActivo = true;
                 bucleDeAudio();
@@ -627,9 +687,16 @@ function cargarNuevaFrasePalabra(sinGuia = false) {
         let flechaGrave = document.createElement('div');
         flechaGrave.className = "flecha-afinacion flecha-grave";
         flechaGrave.setAttribute("aria-hidden", "true");
-        cajaNota.style.cursor = "pointer";
+        if (modoRitmo) {
+            flechaAguda.hidden = true;
+            flechaGrave.hidden = true;
+            cajaNota.style.cursor = "default";
+        } else {
+            cajaNota.style.cursor = "pointer";
+        }
         
             cajaNota.onclick = () => {
+            if (modoRitmo) return;
             if (modoEscucha) {
                 if (estadoEscucha === 'pausada') {
                     silenciarSonidoEscucha();
@@ -735,6 +802,7 @@ function cancelarTemporizadores() {
     cancelarVocesCoro();
     limpiarSilencioEscucha();
     silenciarSonidoEscucha();
+    detenerJuegoRitmo();
     modoEscucha = false;
     modoKaraoke = false;
     notaEnJuicio = null;
@@ -747,8 +815,8 @@ function actualizarFlechas() {
     const btnAnt = document.getElementById('btn-anterior');
     const btnSig = document.getElementById('btn-siguiente');
     if (!btnAnt || !btnSig) return;
-    // En karaoke la canción va sola de principio a fin: las flechas cambiarían la cuenta.
-    if (modoKaraoke) {
+    // En karaoke/ritmo la pieza va sola: las flechas no aplican.
+    if (modoKaraoke || modoRitmo) {
         btnAnt.style.visibility = 'hidden';
         btnSig.style.visibility = 'hidden';
         return;
@@ -1004,7 +1072,7 @@ function avanzarNotaEntrenamiento() {
 function bucleDeAudio() {
     requestAnimationFrame(bucleDeAudio);
     if (modoCalibracion) { procesarCalibracion(); return; }
-    if (modoKaraoke || modoEscucha) {
+    if (modoKaraoke || modoEscucha || modoRitmo) {
         actualizarLucesCompas();
         if (modoKaraoke) procesarKaraoke();
         return;
@@ -1483,14 +1551,609 @@ function ocultarResultadoMicrofono() {
 
 function mostrarCalentamientos() {
     ocultarResultadoMicrofono();
+    cerrarJuegos(false);
     document.body.classList.add("vista-calentamiento");
     document.getElementById("lista-calentamiento").hidden = false;
+    document.getElementById("botones-inicio").style.display = "none";
 }
 
-function cerrarCalentamientos() {
+function cerrarCalentamientos(restaurarBotones = true) {
     document.body.classList.remove("vista-calentamiento");
     document.getElementById("lista-calentamiento").hidden = true;
+    if (restaurarBotones) document.getElementById("botones-inicio").style.display = "flex";
+}
+
+function mostrarJuegos() {
+    ocultarResultadoMicrofono();
+    cerrarCalentamientos(false);
+    cerrarPantallaRitmo();
+    document.body.classList.remove("vista-ritmo");
+    document.body.classList.add("vista-juegos");
+    document.getElementById("lista-juegos").hidden = false;
+    document.getElementById("botones-inicio").style.display = "none";
+}
+
+function cerrarJuegos(restaurarBotones = true) {
+    document.body.classList.remove("vista-juegos");
+    document.body.classList.remove("vista-ritmo");
+    const lista = document.getElementById("lista-juegos");
+    if (lista) lista.hidden = true;
+    cerrarPantallaRitmo();
+    if (restaurarBotones) document.getElementById("botones-inicio").style.display = "flex";
+}
+
+function cerrarApartadosMenu() {
+    cerrarCalentamientos(false);
+    cerrarJuegos(false);
     document.getElementById("botones-inicio").style.display = "flex";
+}
+
+function rellenarSelectorRitmo() {
+    const origen = document.getElementById("selector-cancion");
+    const destino = document.getElementById("selector-ritmo");
+    if (!origen || !destino) return;
+    const valor = destino.value || origen.value;
+    destino.innerHTML = origen.innerHTML;
+    if ([...destino.options].some(o => o.value === valor)) destino.value = valor;
+}
+
+function cerrarPantallaRitmo() {
+    const pantalla = document.getElementById("pantalla-ritmo");
+    if (pantalla) pantalla.hidden = true;
+}
+
+function mostrarPantallaRitmo() {
+    ocultarResultadoMicrofono();
+    rellenarSelectorRitmo();
+    document.getElementById("lista-juegos").hidden = true;
+    document.body.classList.remove("vista-juegos");
+    document.body.classList.add("vista-ritmo");
+    document.getElementById("pantalla-ritmo").hidden = false;
+    document.getElementById("botones-inicio").style.display = "none";
+}
+
+function volverAListaJuegos() {
+    cerrarPantallaRitmo();
+    document.body.classList.remove("vista-ritmo");
+    document.body.classList.add("vista-juegos");
+    document.getElementById("lista-juegos").hidden = false;
+}
+
+function empezarJuego(numero) {
+    if (numero < 1 || numero > 4) return;
+    if (numero === 1) {
+        mostrarPantallaRitmo();
+        return;
+    }
+}
+
+function alCambiarMetronomoRitmo() {
+    const check = document.getElementById("check-metronomo-ritmo");
+    metronomoRitmoActivo = !!(check && check.checked);
+}
+
+function empezarRitmoConPieza() {
+    const sel = document.getElementById("selector-ritmo");
+    const pieza = ((sel && sel.value) || document.getElementById("selector-cancion").value || "").trim();
+    if (!pieza) return;
+    alCambiarMetronomoRitmo();
+    piezaPendiente = pieza;
+    iniciarApp("ritmo");
+}
+
+function ventanaAtaqueRitmo(indice) {
+    return indice === 0 ? RITMO_VENTANA_PRIMERA : RITMO_VENTANA_OK;
+}
+
+function beatIndexRitmo(tiempoMusical) {
+    const esp = firmaEnTiempo(Math.max(0, tiempoMusical)).segundosPorPulso || 0.6;
+    return Math.floor(tiempoMusical / esp + 1e-6);
+}
+
+function clicMetronomoRitmoSiToca(tiempoMusical) {
+    if (!metronomoRitmoActivo || !modoRitmo) return;
+    const beat = beatIndexRitmo(tiempoMusical);
+    if (beat === ultimoBeatMetronomoRitmo) return;
+    if (beat < -1) return;
+    ultimoBeatMetronomoRitmo = beat;
+    const pulsos = firmaEnTiempo(Math.max(0, tiempoMusical)).pulsos || pulsosPorCompas;
+    const puesto = ((beat % pulsos) + pulsos) % pulsos; // 0 = acento
+    pulsoCompasMarcado = puesto + 1;
+    clicDeCompas(puesto === 0);
+}
+
+function volverAPantallaRitmo() {
+    detenerJuegoRitmo();
+    soltarMicrofono();
+    cancelarTemporizadores();
+    document.getElementById("titulo-cancion").style.display = "none";
+    document.getElementById("controles-escucha").style.display = "none";
+    document.getElementById("controles-karaoke").style.display = "none";
+    const contRitmo = document.getElementById("controles-ritmo");
+    if (contRitmo) contRitmo.style.display = "none";
+    document.getElementById("status-box").style.display = "none";
+    document.getElementById("evaluacion").innerHTML = "";
+    document.getElementById("secuencia-visual").innerHTML = "";
+    document.getElementById("palabra-pantalla").innerText = "...";
+    document.getElementById("zona-reinicio").style.display = "none";
+    document.getElementById("btn-volver-calentamiento").hidden = true;
+    document.getElementById("btn-volver-ritmo").hidden = true;
+    document.getElementById("zona-seleccion").style.display = "block";
+    document.getElementById("botones-inicio").style.display = "none";
+    mostrarPantallaRitmo();
+}
+
+function construirNotasRitmo() {
+    const lista = [];
+    FRASES_JUEGO.forEach((palabra, indicePalabra) => {
+        palabra.notesIngles.forEach((ingles, indiceNota) => {
+            lista.push({
+                palabraIndex: indicePalabra,
+                notaIndex: indiceNota,
+                tiempo: palabra.tiempos[indiceNota],
+                duracion: palabra.duraciones[indiceNota] || 0.4,
+                ingles,
+                nombre: palabra.notes[indiceNota],
+                momento: null,   // 'bien' | 'ok' | 'mal' | null
+                duracionOk: null
+            });
+        });
+    });
+    return lista;
+}
+
+function tiempoActualRitmo() {
+    return relojRitmo.tiempoBase + (performance.now() - relojRitmo.t0) / 1000 * velocidadRitmo;
+}
+
+function cambiarVelocidadRitmo(valor) {
+    const nueva = Math.max(0.5, Math.min(2, Number(valor) || 1));
+    const etiqueta = document.getElementById("txt-velocidad-ritmo");
+    const control = document.getElementById("velocidad-ritmo");
+    if (etiqueta) etiqueta.textContent = `×${nueva.toFixed(2).replace(/\.?0+$/, "")}`;
+    if (control && Number(control.value) !== nueva) control.value = String(nueva);
+    if (modoRitmo && (estadoRitmo === "reproduciendo" || estadoRitmo === "pausada")) {
+        const ahora = tiempoActualRitmo();
+        relojRitmo = { t0: performance.now(), tiempoBase: ahora };
+    }
+    velocidadRitmo = nueva;
+}
+
+function actualizarControlesRitmo() {
+    const caja = document.getElementById("controles-ritmo");
+    if (!caja) return;
+    caja.style.display = modoRitmo ? "flex" : "none";
+    if (!modoRitmo) return;
+    const enMarcha = estadoRitmo === "reproduciendo" || estadoRitmo === "cuenta";
+    document.getElementById("btn-pausa-ritmo").style.display = enMarcha ? "inline-block" : "none";
+    document.getElementById("btn-seguir-ritmo").style.display = estadoRitmo === "pausada" ? "inline-block" : "none";
+    document.getElementById("btn-repetir-ritmo").style.display = estadoRitmo === "fin" ? "inline-block" : "none";
+}
+
+function pausarRitmo() {
+    if (!modoRitmo || (estadoRitmo !== "reproduciendo" && estadoRitmo !== "cuenta")) return;
+    if (estadoRitmo === "reproduciendo") {
+        relojRitmo = { t0: performance.now(), tiempoBase: tiempoActualRitmo() };
+    }
+    if (pulsacionRitmo) soltarPulsacionRitmo(pulsacionRitmo.origen);
+    silenciarMelodia();
+    if (animacionRitmoId) {
+        cancelAnimationFrame(animacionRitmoId);
+        animacionRitmoId = 0;
+    }
+    idGuia++; // cancela la cuenta atrás si estaba en marcha
+    estadoRitmo = "pausada";
+    const zona = document.getElementById("zona-pulso-ritmo");
+    if (zona) {
+        zona.classList.remove("pulsando");
+        zona.hidden = false;
+    }
+    const aviso = document.getElementById("aviso-ritmo");
+    if (aviso) aviso.textContent = "Pulsa la pantalla o la barra espaciadora para seguir.";
+    document.getElementById("evaluacion").innerText = "⏸ Ritmo en pausa · pulsa para seguir";
+    actualizarControlesRitmo();
+    actualizarLucesCompas();
+}
+
+function seguirRitmo() {
+    if (!modoRitmo || estadoRitmo !== "pausada") return;
+    if (indiceNotaRitmo >= notasRitmo.length) {
+        terminarJuegoRitmo();
+        return;
+    }
+    estadoRitmo = "reproduciendo";
+    relojRitmo = { t0: performance.now(), tiempoBase: relojRitmo.tiempoBase };
+    ultimoBeatMetronomoRitmo = beatIndexRitmo(relojRitmo.tiempoBase) - 1;
+    const aviso = document.getElementById("aviso-ritmo");
+    if (aviso) aviso.textContent = "Pulsa la pantalla o la barra espaciadora al ritmo. Mantén para la duración.";
+    activarListenersRitmo();
+    animacionRitmoId = requestAnimationFrame(bucleJuegoRitmo);
+    actualizarMarcadorRitmo();
+    actualizarControlesRitmo();
+}
+
+function detenerJuegoRitmo() {
+    if (animacionRitmoId) {
+        cancelAnimationFrame(animacionRitmoId);
+        animacionRitmoId = 0;
+    }
+    quitarListenersRitmo();
+    const zona = document.getElementById("zona-pulso-ritmo");
+    if (zona) {
+        zona.hidden = true;
+        zona.classList.remove("pulsando");
+    }
+    if (pulsacionRitmo) {
+        silenciarMelodia();
+        pulsacionRitmo = null;
+    }
+    modoRitmo = false;
+    estadoRitmo = "fin";
+    const caja = document.getElementById("controles-ritmo");
+    if (caja) caja.style.display = "none";
+}
+
+function activarListenersRitmo() {
+    if (listenersRitmoActivos) return;
+    listenersRitmoActivos = true;
+    const zona = document.getElementById("zona-pulso-ritmo");
+    if (zona) {
+        zona.addEventListener("pointerdown", onRitmoPointerDown);
+        zona.addEventListener("pointerup", onRitmoPointerUp);
+        zona.addEventListener("pointercancel", onRitmoPointerUp);
+        zona.addEventListener("pointerleave", onRitmoPointerUp);
+    }
+    window.addEventListener("keydown", onRitmoKeyDown);
+    window.addEventListener("keyup", onRitmoKeyUp);
+}
+
+function quitarListenersRitmo() {
+    if (!listenersRitmoActivos) return;
+    listenersRitmoActivos = false;
+    const zona = document.getElementById("zona-pulso-ritmo");
+    if (zona) {
+        zona.removeEventListener("pointerdown", onRitmoPointerDown);
+        zona.removeEventListener("pointerup", onRitmoPointerUp);
+        zona.removeEventListener("pointercancel", onRitmoPointerUp);
+        zona.removeEventListener("pointerleave", onRitmoPointerUp);
+    }
+    window.removeEventListener("keydown", onRitmoKeyDown);
+    window.removeEventListener("keyup", onRitmoKeyUp);
+}
+
+function onRitmoPointerDown(ev) {
+    if (!modoRitmo) return;
+    if (estadoRitmo === "pausada") {
+        ev.preventDefault();
+        seguirRitmo();
+        return;
+    }
+    if (estadoRitmo !== "reproduciendo") return;
+    ev.preventDefault();
+    const zona = document.getElementById("zona-pulso-ritmo");
+    if (zona && ev.pointerId != null) {
+        try { zona.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+    }
+    iniciarPulsacionRitmo("pointer");
+}
+
+function onRitmoPointerUp(ev) {
+    if (!modoRitmo || estadoRitmo !== "reproduciendo") return;
+    if (ev) ev.preventDefault();
+    soltarPulsacionRitmo("pointer");
+}
+
+function onRitmoKeyDown(ev) {
+    if (!modoRitmo) return;
+    if (ev.repeat) return;
+    if (ev.code !== "Space" && ev.key !== " " && ev.code !== "Enter") return;
+    ev.preventDefault();
+    if (estadoRitmo === "pausada") {
+        seguirRitmo();
+        return;
+    }
+    if (estadoRitmo !== "reproduciendo") return;
+    iniciarPulsacionRitmo("tecla");
+}
+
+function onRitmoKeyUp(ev) {
+    if (!modoRitmo || estadoRitmo !== "reproduciendo") return;
+    if (ev.code !== "Space" && ev.key !== " " && ev.code !== "Enter") return;
+    ev.preventDefault();
+    soltarPulsacionRitmo("tecla");
+}
+
+function mostrarPalabraRitmo(indicePalabra) {
+    if (!FRASES_JUEGO[indicePalabra]) return;
+    fraseActualIndex = indicePalabra;
+    cargarNuevaFrasePalabra(true);
+    resaltarNotaRitmo();
+}
+
+function claseColorRitmo(juzgada) {
+    if (!juzgada || !juzgada.momento) return null;
+    const momento = juzgada.momento;
+    const duracion = juzgada.duracionOk;
+    // Mientras se mantiene, solo el ataque; al soltar, el peor de momento y duración.
+    if (!duracion) {
+        if (momento === "bien") return "ritmo-bien";
+        if (momento === "ok") return "ritmo-regular";
+        return "ritmo-mal";
+    }
+    if (momento === "mal" || duracion === "mal") return "ritmo-mal";
+    if (momento === "bien" && duracion === "bien") return "ritmo-bien";
+    return "ritmo-regular";
+}
+
+function resaltarNotaRitmo() {
+    const notaActual = notasRitmo[indiceNotaRitmo];
+    const palabra = FRASES_JUEGO[fraseActualIndex];
+    if (!palabra) return;
+    for (let k = 0; k < palabra.notes.length; k++) {
+        const caja = document.getElementById(`caja-nota-${k}`);
+        if (!caja) continue;
+        const juzgada = notasRitmo.find(n => n.palabraIndex === fraseActualIndex && n.notaIndex === k && n.momento);
+        const color = claseColorRitmo(juzgada);
+        if (color) {
+            caja.className = `nota-caja ${color}`;
+        } else {
+            const esActual = notaActual && notaActual.palabraIndex === fraseActualIndex && k === notaActual.notaIndex;
+            caja.className = esActual ? "nota-caja activa" : "nota-caja";
+        }
+    }
+}
+
+function claseMomentoRitmo(errorAbs) {
+    if (errorAbs <= RITMO_VENTANA_BIEN) return "bien";
+    if (errorAbs <= RITMO_VENTANA_OK) return "ok";
+    return "mal";
+}
+
+function claseDuracionRitmo(hold, esperada) {
+    // hold es tiempo real; la duración musical se acorta/alarga con la velocidad.
+    const ref = Math.max(0.12, (esperada || 0.4) / Math.max(0.5, velocidadRitmo));
+    const rel = Math.abs(hold - ref) / ref;
+    if (rel <= RITMO_DURACION_BIEN) return "bien";
+    if (rel <= RITMO_DURACION_OK) return "ok";
+    return "mal";
+}
+
+function actualizarMarcadorRitmo() {
+    const total = notasRitmo.length;
+    const van = Math.min(indiceNotaRitmo + 1, total);
+    document.getElementById("evaluacion").innerText =
+        `Ritmo · momento ${aciertosMomentoRitmo}/${notasJuzgadasRitmo || 0} · duración ${aciertosDuracionRitmo}/${notasJuzgadasRitmo || 0} · nota ${van} de ${total}`;
+}
+
+function iniciarPulsacionRitmo(origen) {
+    if (pulsacionRitmo) return;
+    const ahoraMusical = tiempoActualRitmo();
+    // Solo cuenta si la pulsación cae dentro de la ventana de una nota pendiente.
+    // Si no, se ignora (p. ej. silencio o anacrusa antes de la primera nota).
+    let candidata = -1;
+    let mejor = Infinity;
+    for (let i = indiceNotaRitmo; i < Math.min(notasRitmo.length, indiceNotaRitmo + 4); i++) {
+        const n = notasRitmo[i];
+        if (n.momento) continue;
+        const err = Math.abs(ahoraMusical - n.tiempo);
+        if (err <= ventanaAtaqueRitmo(i) && err < mejor) {
+            mejor = err;
+            candidata = i;
+        }
+    }
+    if (candidata < 0) return;
+
+    // Si nos hemos pasado de notas anteriores sin pulsarlas, márcalas fallidas.
+    while (indiceNotaRitmo < candidata) {
+        marcarFalloRitmo(indiceNotaRitmo, "sin pulsar");
+        indiceNotaRitmo++;
+    }
+
+    const nota = notasRitmo[candidata];
+    indiceNotaRitmo = candidata;
+    if (nota.palabraIndex !== fraseActualIndex) mostrarPalabraRitmo(nota.palabraIndex);
+
+    const momento = claseMomentoRitmo(Math.abs(ahoraMusical - nota.tiempo));
+    nota.momento = momento;
+    if (momento === "bien" || momento === "ok") aciertosMomentoRitmo++;
+
+    pulsacionRitmo = {
+        origen,
+        inicioMs: performance.now(),
+        notaIndex: candidata
+    };
+    const zona = document.getElementById("zona-pulso-ritmo");
+    if (zona) zona.classList.add("pulsando");
+    sonarNota(nota.ingles, Math.max(nota.duracion, 0.8), VOLUMEN_MELODIA_GUIA);
+    resaltarNotaRitmo();
+    actualizarMarcadorRitmo();
+}
+
+function soltarPulsacionRitmo(origen) {
+    if (!pulsacionRitmo || pulsacionRitmo.origen !== origen) return;
+    const hold = (performance.now() - pulsacionRitmo.inicioMs) / 1000;
+    const nota = notasRitmo[pulsacionRitmo.notaIndex];
+    silenciarMelodia();
+    const zona = document.getElementById("zona-pulso-ritmo");
+    if (zona) zona.classList.remove("pulsando");
+    pulsacionRitmo = null;
+    if (!nota) return;
+
+    const duracionOk = claseDuracionRitmo(hold, nota.duracion);
+    nota.duracionOk = duracionOk;
+    notasJuzgadasRitmo++;
+    if (duracionOk === "bien" || duracionOk === "ok") aciertosDuracionRitmo++;
+    resaltarNotaRitmo();
+    actualizarMarcadorRitmo();
+
+    if (pulsacionRitmo === null && indiceNotaRitmo === notasRitmo.indexOf(nota)) {
+        indiceNotaRitmo++;
+        if (indiceNotaRitmo >= notasRitmo.length) {
+            terminarJuegoRitmo();
+            return;
+        }
+        const siguiente = notasRitmo[indiceNotaRitmo];
+        if (siguiente.palabraIndex !== fraseActualIndex) mostrarPalabraRitmo(siguiente.palabraIndex);
+        else resaltarNotaRitmo();
+    }
+}
+
+function marcarFalloRitmo(indice, motivo) {
+    const nota = notasRitmo[indice];
+    if (!nota || nota.momento) return;
+    nota.momento = "mal";
+    nota.duracionOk = "mal";
+    notasJuzgadasRitmo++;
+    if (nota.palabraIndex === fraseActualIndex) resaltarNotaRitmo();
+}
+
+function bucleJuegoRitmo() {
+    if (!modoRitmo || estadoRitmo !== "reproduciendo") {
+        animacionRitmoId = 0;
+        return;
+    }
+    const ahora = tiempoActualRitmo();
+    clicMetronomoRitmoSiToca(ahora);
+    if (pulsacionRitmo) {
+        const notaHold = notasRitmo[pulsacionRitmo.notaIndex];
+        if (notaHold && ahora > notaHold.tiempo + Math.max(notaHold.duracion, 0.4) + RITMO_VENTANA_OK) {
+            soltarPulsacionRitmo(pulsacionRitmo.origen);
+        }
+    }
+    // Notas que ya pasaron la ventana sin pulsación → fallo
+    while (indiceNotaRitmo < notasRitmo.length) {
+        const nota = notasRitmo[indiceNotaRitmo];
+        if (nota.momento) {
+            if (!pulsacionRitmo && nota.duracionOk) indiceNotaRitmo++;
+            else break;
+        } else if (ahora > nota.tiempo + ventanaAtaqueRitmo(indiceNotaRitmo)) {
+            marcarFalloRitmo(indiceNotaRitmo, "tarde");
+            indiceNotaRitmo++;
+            if (indiceNotaRitmo >= notasRitmo.length) {
+                terminarJuegoRitmo();
+                return;
+            }
+            const siguiente = notasRitmo[indiceNotaRitmo];
+            if (siguiente.palabraIndex !== fraseActualIndex) mostrarPalabraRitmo(siguiente.palabraIndex);
+            else resaltarNotaRitmo();
+            actualizarMarcadorRitmo();
+        } else {
+            if (nota.palabraIndex !== fraseActualIndex) mostrarPalabraRitmo(nota.palabraIndex);
+            else resaltarNotaRitmo();
+            break;
+        }
+    }
+    animacionRitmoId = requestAnimationFrame(bucleJuegoRitmo);
+}
+
+function iniciarJuegoRitmo() {
+    detenerJuegoRitmo();
+    soltarMicrofono();
+    notasRitmo = construirNotasRitmo();
+    if (!notasRitmo.length) return;
+    const controlVel = document.getElementById("velocidad-ritmo");
+    if (controlVel) cambiarVelocidadRitmo(controlVel.value);
+    else velocidadRitmo = 1;
+    modoRitmo = true;
+    estadoRitmo = "cuenta";
+    indiceNotaRitmo = 0;
+    aciertosMomentoRitmo = 0;
+    aciertosDuracionRitmo = 0;
+    notasJuzgadasRitmo = 0;
+    pulsacionRitmo = null;
+    document.getElementById("controles-escucha").style.display = "none";
+    document.getElementById("controles-karaoke").style.display = "none";
+    document.getElementById("zona-reinicio").style.display = "none";
+    document.getElementById("btn-volver-ritmo").hidden = false;
+    const zona = document.getElementById("zona-pulso-ritmo");
+    zona.hidden = false;
+    zona.classList.remove("pulsando");
+    document.getElementById("aviso-ritmo").textContent =
+        "Pulsa la pantalla o la barra espaciadora al ritmo. Mantén para la duración.";
+    mostrarPalabraRitmo(0);
+    actualizarMarcadorRitmo();
+    restaurarCompasInicial();
+    alCambiarMetronomoRitmo();
+    ultimoBeatMetronomoRitmo = -999;
+    actualizarControlesRitmo();
+    // Cuenta de un compás, luego arranca el reloj musical en 0.
+    estadoRitmo = "cuenta";
+    pulsoCompasMarcado = 0;
+    actualizarLucesCompas();
+    idGuia++;
+    const idEjecucion = idGuia;
+    let quedan = pulsosPorCompas;
+    const pulsar = () => {
+        if (!modoRitmo || idEjecucion !== idGuia || estadoRitmo === "pausada") return;
+        if (quedan < 1) {
+            // Prepara UI y listeners antes del reloj. Si la 1ª nota está en t≈0,
+            // anticipamos un pulso para poder atacar el downbeat con margen.
+            estadoRitmo = "reproduciendo";
+            mostrarPalabraRitmo(0);
+            activarListenersRitmo();
+            zona.focus();
+            const primera = notasRitmo[0];
+            const anticipoMusical = (primera && primera.tiempo <= 0.05) ? segundosPorPulso : 0;
+            ultimoBeatMetronomoRitmo = -999;
+            relojRitmo = { t0: performance.now(), tiempoBase: -anticipoMusical };
+            animacionRitmoId = requestAnimationFrame(bucleJuegoRitmo);
+            actualizarMarcadorRitmo();
+            actualizarControlesRitmo();
+            return;
+        }
+        mostrarCuentaKaraoke(String(quedan), "");
+        pulsoCompasMarcado = pulsosPorCompas - quedan + 1;
+        actualizarLucesCompas();
+        if (metronomoRitmoActivo) clicDeCompas(quedan === pulsosPorCompas);
+        quedan--;
+        setTimeout(pulsar, segundosPorPulso * 1000 / velocidadRitmo);
+    };
+    document.getElementById("palabra-pantalla").innerText = "Ritmo";
+    setTimeout(pulsar, 200);
+}
+
+function terminarJuegoRitmo() {
+    if (!modoRitmo || estadoRitmo === "fin") return;
+    if (pulsacionRitmo) {
+        silenciarMelodia();
+        pulsacionRitmo = null;
+    }
+    estadoRitmo = "fin";
+    quitarListenersRitmo();
+    if (animacionRitmoId) {
+        cancelAnimationFrame(animacionRitmoId);
+        animacionRitmoId = 0;
+    }
+    const zona = document.getElementById("zona-pulso-ritmo");
+    if (zona) {
+        zona.classList.remove("pulsando");
+        zona.hidden = true;
+    }
+    const total = Math.max(1, notasRitmo.length);
+    const pctMomento = Math.round((aciertosMomentoRitmo * 100) / total);
+    const pctDuracion = Math.round((aciertosDuracionRitmo * 100) / total);
+    document.getElementById("palabra-pantalla").innerHTML =
+        `Ritmo <img src="./imagenes/tambor-ritmo.jpg?v=2" alt="" class="icono-tambor icono-tambor-titulo">`;
+    document.getElementById("secuencia-visual").innerHTML = "";
+    const resumen = document.createElement("div");
+    resumen.className = "resumen-final";
+    resumen.innerHTML =
+        `<div class="resumen-logro">Momento: ${aciertosMomentoRitmo} de ${total} (${pctMomento}%).</div>` +
+        `<div class="resumen-logro">Duración: ${aciertosDuracionRitmo} de ${total} (${pctDuracion}%).</div>` +
+        `<div class="resumen-titulo">${pctMomento >= 70 && pctDuracion >= 70 ? "Buen pulso. El ritmo ya va contigo." : "Sigue ensayando: el oído interno se entrena pulsando."}</div>`;
+    document.getElementById("secuencia-visual").appendChild(resumen);
+    document.getElementById("evaluacion").innerHTML =
+        `<span class="success">Momento ${pctMomento}% · Duración ${pctDuracion}%</span>`;
+    anotarJuegoHoy("Ritmo", {
+        momento: pctMomento,
+        duracion: pctDuracion,
+        aciertosMomento: aciertosMomentoRitmo,
+        aciertosDuracion: aciertosDuracionRitmo,
+        total
+    });
+    document.getElementById("zona-reinicio").style.display = "flex";
+    actualizarControlesRitmo();
+    actualizarLucesCompas();
 }
 
 function volverACalentamientos() {
@@ -1508,6 +2171,7 @@ function volverACalentamientos() {
     document.getElementById("zona-seleccion").style.display = "block";
     document.getElementById("botones-inicio").style.display = "none";
     document.getElementById("btn-volver-calentamiento").hidden = true;
+    cerrarJuegos(false);
     document.body.classList.add("vista-calentamiento");
     document.getElementById("lista-calentamiento").hidden = false;
 }
@@ -2304,7 +2968,8 @@ function actualizarLucesCompas() {
     if (!caja) return;
     const enKaraoke = modoKaraoke && estadoKaraoke !== 'fin';
     const enEscucha = modoEscucha && estadoEscucha !== 'fin';
-    if (esCalentamiento(cancionActual) || (!enKaraoke && !enEscucha)) {
+    const enRitmo = modoRitmo && (estadoRitmo === 'reproduciendo' || estadoRitmo === 'cuenta' || estadoRitmo === 'pausada');
+    if (esCalentamiento(cancionActual) || (!enKaraoke && !enEscucha && !enRitmo)) {
         caja.hidden = true;
         return;
     }
@@ -2315,6 +2980,12 @@ function actualizarLucesCompas() {
         pulsoCompasMarcado = pulsoDeTiempo(tiempoActual);
     } else if (modoEscucha && estadoEscucha === 'reproduciendo') {
         tiempoActual = relojEscucha.tiempoBase + (performance.now() - relojEscucha.t0) / 1000;
+        pulsoCompasMarcado = pulsoDeTiempo(tiempoActual);
+    } else if (modoRitmo && estadoRitmo === 'reproduciendo') {
+        tiempoActual = tiempoActualRitmo();
+        pulsoCompasMarcado = pulsoDeTiempo(tiempoActual);
+    } else if (modoRitmo && estadoRitmo === 'pausada') {
+        tiempoActual = relojRitmo.tiempoBase;
         pulsoCompasMarcado = pulsoDeTiempo(tiempoActual);
     }
     if (tiempoActual != null) {
@@ -2818,7 +3489,11 @@ function regresarAlMenu() {
     document.getElementById('zona-seleccion').style.display = "block";
     document.getElementById('botones-inicio').style.display = "flex";
     document.getElementById("btn-volver-calentamiento").hidden = true;
-    cerrarCalentamientos();
+    const btnRitmo = document.getElementById("btn-volver-ritmo");
+    if (btnRitmo) btnRitmo.hidden = true;
+    const zonaRitmo = document.getElementById("zona-pulso-ritmo");
+    if (zonaRitmo) zonaRitmo.hidden = true;
+    cerrarApartadosMenu();
 }
 
 cargarPiano();

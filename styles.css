@@ -81,6 +81,129 @@
         .lista-calentamiento { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 12px; }
         .lista-calentamiento[hidden] { display: none; }
         .lista-calentamiento button { min-width: 72px; padding: 10px 16px; background: #ff4081; color: #fff; }
+        .lista-juegos { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 12px; }
+        .lista-juegos[hidden] { display: none; }
+        .fila-juego { display: flex; align-items: center; gap: 12px; min-width: 160px; }
+        .lista-juegos button { min-width: 72px; padding: 10px 16px; background: #7c4dff; color: #fff; }
+        .etiqueta-juego { color: #eee; font-size: 18px; font-weight: 600; }
+        .pantalla-ritmo {
+            margin-top: 12px;
+            text-align: center;
+        }
+        .pantalla-ritmo[hidden] { display: none; }
+        .titulo-apartado-juego {
+            margin: 0 0 6px;
+            color: #fff;
+            font-size: 28px;
+            font-weight: 700;
+        }
+        .titulo-juego-activo {
+            margin: 0 0 22px;
+            color: #b388ff;
+            font-size: 22px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .icono-tambor {
+            width: 1.35em;
+            height: 1.35em;
+            object-fit: cover;
+            border-radius: 50%;
+            vertical-align: -0.25em;
+        }
+        .icono-tambor-titulo { width: 1.6em; height: 1.6em; }
+        #btn-volver-ritmo .icono-tambor { width: 1.25em; height: 1.25em; }
+        .etiqueta-elige-ritmo {
+            display: block;
+            margin: 0 0 10px;
+            color: #aaa;
+            font-weight: 700;
+            text-align: left;
+        }
+        #selector-ritmo {
+            width: 100%;
+            background: #2a2a30;
+            color: #fff;
+            border: 2px solid #444;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 16px;
+        }
+        .ayuda-ritmo {
+            color: #aaa;
+            font-size: 14px;
+            line-height: 1.4;
+            margin: 0 0 12px;
+            text-align: left;
+        }
+        .opcion-metronomo-ritmo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            justify-content: flex-start;
+            margin: 0 0 16px;
+            color: #eee;
+            font-size: 15px;
+            cursor: pointer;
+        }
+        .opcion-metronomo-ritmo input {
+            accent-color: #7c4dff;
+            width: 18px;
+            height: 18px;
+        }
+        .acciones-ritmo {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+        }
+        .btn-empezar-ritmo {
+            background: #7c4dff;
+            color: #fff;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        .btn-volver-juegos {
+            background: #2a2a30;
+            color: #b388ff;
+            border: 2px solid #444;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        .btn-volver-juegos:hover {
+            background: rgba(124, 77, 255, 0.15);
+            border-color: #7c4dff;
+        }
+        .zona-pulso-ritmo {
+            margin: 0 0 16px;
+            padding: 18px 14px;
+            border-radius: 14px;
+            border: 2px dashed #7c4dff;
+            background: rgba(124, 77, 255, 0.12);
+            color: #ddd;
+            font-size: 15px;
+            line-height: 1.4;
+            text-align: center;
+            user-select: none;
+            touch-action: none;
+            cursor: pointer;
+        }
+        .zona-pulso-ritmo[hidden] { display: none; }
+        .zona-pulso-ritmo.pulsando {
+            background: rgba(124, 77, 255, 0.28);
+            border-style: solid;
+        }
+        .nota-caja.ritmo-bien { border-color: #00e676; color: #00e676; background: rgba(0,230,118,0.2); }
+        .nota-caja.ritmo-regular { border-color: #ffd740; color: #ffd740; background: rgba(255,215,64,0.15); }
+        .nota-caja.ritmo-mal { border-color: #ff5252; color: #ff5252; background: rgba(255,82,82,0.15); }
         .resultado-micro { margin-top: 14px; }
         .medidor-micro { height: 14px; background: #2a2a30; border-radius: 8px; overflow: hidden; border: 1px solid #444; }
         #nivel-micro { height: 100%; width: 0; background: #00e676; }
@@ -173,13 +296,31 @@
     background: rgba(0,176,255,0.15);
     border-color: #00b0ff;
 }
-#btn-volver-calentamiento { margin-left: auto; }
+#btn-volver-calentamiento,
+#btn-volver-ritmo { margin-left: auto; }
 #zona-seleccion > .barra-superior { display: none; margin-bottom: 8px; }
-body.vista-calentamiento #zona-seleccion > .barra-superior { display: flex; }
+body.vista-calentamiento #zona-seleccion > .barra-superior,
+body.vista-juegos #zona-seleccion > .barra-superior,
+body.vista-ritmo #zona-seleccion > .barra-superior { display: flex; }
 body.vista-calentamiento #btn-probar-micro,
+body.vista-calentamiento #btn-juegos,
 body.vista-calentamiento #elige-pieza,
-body.vista-calentamiento #botones-inicio { display: none !important; }
-body.vista-calentamiento #btn-calentamiento {
+body.vista-calentamiento #botones-inicio,
+body.vista-juegos #btn-probar-micro,
+body.vista-juegos #btn-calentamiento,
+body.vista-juegos #elige-pieza,
+body.vista-juegos #botones-inicio,
+body.vista-juegos .control-dificultad,
+body.vista-juegos #opcion-coro,
+body.vista-ritmo #btn-probar-micro,
+body.vista-ritmo #btn-calentamiento,
+body.vista-ritmo #btn-juegos,
+body.vista-ritmo #elige-pieza,
+body.vista-ritmo #botones-inicio,
+body.vista-ritmo .control-dificultad,
+body.vista-ritmo #opcion-coro { display: none !important; }
+body.vista-calentamiento #btn-calentamiento,
+body.vista-juegos #btn-juegos {
     background: transparent;
     color: #fff;
     border: none;
@@ -188,7 +329,9 @@ body.vista-calentamiento #btn-calentamiento {
     cursor: default;
     pointer-events: none;
 }
-body.vista-calentamiento #btn-calentamiento:hover { transform: none; }
+body.vista-calentamiento #btn-calentamiento:hover,
+body.vista-juegos #btn-juegos:hover { transform: none; }
+body.vista-ritmo #prueba-micro > .fila-pruebas { display: none; }
 
 
 /* ===== Título de la canción junto al nombre del coro ===== */

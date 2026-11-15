@@ -34,7 +34,7 @@
     </dialog>
 
     <dialog id="canciones-hoy" class="ayuda" onclick="if (event.target === this) cerrarCancionesHoy()">
-        <h3>Enhorabuena</h3>
+        <h3 id="titulo-canciones-hoy">Enhorabuena</h3>
         <p id="enhorabuena-hoy" class="enhorabuena-hoy"></p>
         <ul id="lista-canciones-hoy" class="lista-canciones-hoy"></ul>
         <button type="button" class="btn-ayuda-cerrar" onclick="cerrarCancionesHoy()">Cerrar</button>
@@ -42,12 +42,13 @@
     
     <div id="zona-seleccion">
         <div class="barra-superior">
-            <button type="button" id="btn-inicio-menu" class="btn-home" onclick="cerrarCalentamientos()">Inicio 🏠</button>
+            <button type="button" id="btn-inicio-menu" class="btn-home" onclick="cerrarApartadosMenu()">Inicio 🏠</button>
         </div>
         <div id="prueba-micro" class="prueba-micro">
             <div class="fila-pruebas">
                 <button type="button" id="btn-probar-micro" onclick="probarMicrofono()">Probar micrófono 🎤</button>
                 <button type="button" id="btn-calentamiento" onclick="mostrarCalentamientos()">Calentamiento 🔥</button>
+                <button type="button" id="btn-juegos" onclick="mostrarJuegos()">Juegos 🎲</button>
             </div>
             <div id="lista-calentamiento" class="lista-calentamiento" hidden>
                 <button type="button" onclick="empezarCalentamiento(1)">1</button>
@@ -55,6 +56,36 @@
                 <button type="button" onclick="empezarCalentamiento(3)">3</button>
                 <button type="button" onclick="empezarCalentamiento(4)">4</button>
                 <button type="button" onclick="empezarCalentamiento(5)">5</button>
+            </div>
+            <div id="lista-juegos" class="lista-juegos" hidden>
+                <div class="fila-juego">
+                    <button type="button" onclick="empezarJuego(1)">1</button>
+                    <span class="etiqueta-juego">ritmo <img src="./imagenes/tambor-ritmo.jpg?v=2" alt="" class="icono-tambor"></span>
+                </div>
+                <div class="fila-juego">
+                    <button type="button" onclick="empezarJuego(2)">2</button>
+                </div>
+                <div class="fila-juego">
+                    <button type="button" onclick="empezarJuego(3)">3</button>
+                </div>
+                <div class="fila-juego">
+                    <button type="button" onclick="empezarJuego(4)">4</button>
+                </div>
+            </div>
+            <div id="pantalla-ritmo" class="pantalla-ritmo" hidden>
+                <h3 class="titulo-apartado-juego">Juegos</h3>
+                <h4 class="titulo-juego-activo">Ritmo <img src="./imagenes/tambor-ritmo.jpg?v=2" alt="" class="icono-tambor icono-tambor-titulo"></h4>
+                <label for="selector-ritmo" class="etiqueta-elige-ritmo">Elige una pieza para ensayar el ritmo:</label>
+                <select id="selector-ritmo"></select>
+                <p class="ayuda-ritmo">La melodía solo suena al pulsar. Se valora el momento y la duración de cada pulsación.</p>
+                <label class="opcion-metronomo-ritmo">
+                    <input type="checkbox" id="check-metronomo-ritmo" checked onchange="alCambiarMetronomoRitmo()">
+                    Oír el metrónomo
+                </label>
+                <div class="acciones-ritmo">
+                    <button type="button" class="btn-empezar-ritmo" onclick="empezarRitmoConPieza()">Empezar ritmo ▶</button>
+                    <button type="button" class="btn-volver-juegos" onclick="volverAListaJuegos()">← Juegos</button>
+                </div>
             </div>
             <div id="resultado-micro" class="resultado-micro" hidden>
                 <div class="medidor-micro" aria-hidden="true"><div id="nivel-micro"></div></div>
@@ -113,6 +144,7 @@
         <div class="barra-superior">
             <button class="btn-home" onclick="regresarAlMenu()" aria-label="Volver al inicio" title="Volver al inicio">Inicio 🏠</button>
             <button type="button" id="btn-volver-calentamiento" class="btn-home" hidden onclick="volverACalentamientos()">Calentamiento 🔥</button>
+            <button type="button" id="btn-volver-ritmo" class="btn-home" hidden onclick="volverAPantallaRitmo()">Ritmo <img src="./imagenes/tambor-ritmo.jpg?v=2" alt="" class="icono-tambor"></button>
         </div>
 
         <div class="navegacion-palabra">
@@ -121,6 +153,9 @@
             <button id="btn-siguiente" class="btn-flecha" onclick="irAPalabraSiguiente()" aria-label="Palabra siguiente" title="Palabra siguiente (→)" style="visibility:hidden">▶</button>
         </div>
         <div id="compas-karaoke" class="compas-karaoke" hidden></div>
+        <div id="zona-pulso-ritmo" class="zona-pulso-ritmo" hidden tabindex="0">
+            <span id="aviso-ritmo">Pulsa la pantalla o la barra espaciadora al ritmo. Mantén para la duración.</span>
+        </div>
         <div id="secuencia-visual" class="secuencia-cajas"></div>
 
         <div id="evaluacion" style="margin-top: 15px; font-weight: bold; font-size: 18px; min-height: 25px;"></div>
@@ -140,6 +175,15 @@
             <button id="btn-seguir-escucha" class="btn-escucha" onclick="iniciarEscuchaDesde(fraseActualIndex)" style="display: none;">Seguir escuchando ▶</button>
             <button id="btn-entrenar-aqui" onclick="pasarAEntrenamiento()" style="display: none;">Entrenar desde esta palabra 🎤</button>
         </div>
+
+        <div id="controles-ritmo" class="controles-escucha" style="display: none;">
+            <label class="control-velocidad" for="velocidad-ritmo">Velocidad <span id="txt-velocidad-ritmo">×1</span>
+                <input type="range" id="velocidad-ritmo" min="0.5" max="2" value="1" step="0.05" oninput="cambiarVelocidadRitmo(this.value)">
+            </label>
+            <button id="btn-pausa-ritmo" class="btn-pausa" onclick="pausarRitmo()" aria-label="Pausa" title="Pausa">Pausa ❚❚</button>
+            <button id="btn-seguir-ritmo" class="btn-escucha" onclick="seguirRitmo()" style="display: none;">Seguir ritmo ▶</button>
+            <button id="btn-repetir-ritmo" class="btn-escucha" onclick="iniciarJuegoRitmo()" style="display: none;">Otra vez ↺</button>
+        </div>
         
         <div id="zona-reinicio" style="display: none;">
             <button type="button" class="btn-hoy" onclick="abrirCancionesHoy()">Canciones estudiadas hoy 📋</button>
@@ -150,6 +194,6 @@
 
     <!--cargamos el motor -->
     
-    <script src="./app.js?v=piano22"></script>
+    <script src="./app.js?v=piano34"></script>
 </body>
 </html>
