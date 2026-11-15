@@ -81,11 +81,26 @@
         .lista-calentamiento { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 12px; }
         .lista-calentamiento[hidden] { display: none; }
         .lista-calentamiento button { min-width: 72px; padding: 10px 16px; background: #ff4081; color: #fff; }
-        .lista-juegos { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 12px; }
+        .lista-juegos {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+            margin: 12px auto 0;
+            width: fit-content;
+            min-width: 220px;
+        }
         .lista-juegos[hidden] { display: none; }
-        .fila-juego { display: flex; align-items: center; gap: 12px; min-width: 160px; }
-        .lista-juegos button { min-width: 72px; padding: 10px 16px; background: #7c4dff; color: #fff; }
+        .fila-juego {
+            display: grid;
+            grid-template-columns: 72px minmax(0, 1fr);
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+        }
+        .lista-juegos button { min-width: 72px; width: 72px; padding: 10px 16px; background: #7c4dff; color: #fff; }
         .etiqueta-juego { color: #eee; font-size: 18px; font-weight: 600; }
+        .emoji-pajaro { display: inline-block; transform: scaleX(-1); }
         .pantalla-ritmo {
             margin-top: 12px;
             text-align: center;
@@ -122,7 +137,8 @@
             font-weight: 700;
             text-align: left;
         }
-        #selector-ritmo {
+        #selector-ritmo,
+        #selector-pajaro {
             width: 100%;
             background: #2a2a30;
             color: #fff;
@@ -214,6 +230,114 @@
         .zona-pulso-ritmo.pulsando {
             background: rgba(124, 77, 255, 0.28);
             border-style: solid;
+        }
+        .escenario-pajaro {
+            position: relative;
+            margin: 0 0 16px;
+            height: min(52vh, 360px);
+            min-height: 220px;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 2px solid #3d5a40;
+            background:
+                linear-gradient(180deg, #87ceeb 0%, #b8e0f0 55%, #c8e6c9 78%, #81c784 100%);
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        .escenario-pajaro[hidden] { display: none; }
+        .marcador-pajaro {
+            position: absolute;
+            top: 10px;
+            right: 12px;
+            z-index: 4;
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: rgba(20, 40, 20, 0.45);
+            color: #fff;
+            font-size: 15px;
+            font-weight: 700;
+        }
+        .lineas-pajaro {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            pointer-events: none;
+        }
+        .linea-tono-pajaro {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 0;
+            border-top: 1px dashed rgba(255, 255, 255, 0.45);
+        }
+        .linea-tono-pajaro.base {
+            border-top: 2px solid rgba(255, 255, 255, 0.7);
+        }
+        .pajaro {
+            position: absolute;
+            left: 12%;
+            top: 50%;
+            z-index: 3;
+            line-height: 0;
+            transform: translate(-50%, -50%);
+            transition: top 0.05s linear;
+            filter: drop-shadow(0 2px 2px rgba(0,0,0,0.25));
+            will-change: top;
+        }
+        .pajaro-dibujo {
+            display: block;
+            width: clamp(44px, 12vw, 64px);
+            height: auto;
+            overflow: visible;
+        }
+        .pajaro .pico-abierto { display: none; }
+        .pajaro.cantando .pico-cerrado { display: none; }
+        .pajaro.cantando .pico-abierto { display: inline; }
+        .pajaro.recogiendo {
+            transform: translate(-50%, -50%) scale(1.14);
+        }
+        .cerezas-pajaro {
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            pointer-events: none;
+        }
+        .cereza-pajaro {
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1px;
+            line-height: 1;
+            transform: translate(-50%, -50%);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2));
+            will-change: left, top;
+            pointer-events: none;
+        }
+        .cereza-icono {
+            font-size: clamp(22px, 6vw, 34px);
+            line-height: 1;
+        }
+        .cereza-silaba {
+            font-size: clamp(11px, 2.8vw, 14px);
+            font-weight: 700;
+            color: #143016;
+            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+            white-space: nowrap;
+            max-width: 4.5em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .cereza-pajaro.recogida {
+            opacity: 0;
+            transform: translate(-50%, -50%) scale(1.4);
+        }
+        .cereza-pajaro.fallida {
+            opacity: 0.35;
+            filter: grayscale(0.8);
         }
         body.jugando-ritmo #status-box,
         body.jugando-ritmo #status-box * {
@@ -318,11 +442,13 @@
     border-color: #00b0ff;
 }
 #btn-volver-calentamiento,
-#btn-volver-ritmo { margin-left: auto; }
+#btn-volver-ritmo,
+#btn-volver-pajaro { margin-left: auto; }
 #zona-seleccion > .barra-superior { display: none; margin-bottom: 8px; }
 body.vista-calentamiento #zona-seleccion > .barra-superior,
 body.vista-juegos #zona-seleccion > .barra-superior,
-body.vista-ritmo #zona-seleccion > .barra-superior { display: flex; }
+body.vista-ritmo #zona-seleccion > .barra-superior,
+body.vista-pajaro #zona-seleccion > .barra-superior { display: flex; }
 body.vista-calentamiento #btn-probar-micro,
 body.vista-calentamiento #btn-juegos,
 body.vista-calentamiento #elige-pieza,
@@ -339,7 +465,14 @@ body.vista-ritmo #btn-juegos,
 body.vista-ritmo #elige-pieza,
 body.vista-ritmo #botones-inicio,
 body.vista-ritmo .control-dificultad,
-body.vista-ritmo #opcion-coro { display: none !important; }
+body.vista-ritmo #opcion-coro,
+body.vista-pajaro #btn-probar-micro,
+body.vista-pajaro #btn-calentamiento,
+body.vista-pajaro #btn-juegos,
+body.vista-pajaro #elige-pieza,
+body.vista-pajaro #botones-inicio,
+body.vista-pajaro .control-dificultad,
+body.vista-pajaro #opcion-coro { display: none !important; }
 body.vista-calentamiento #btn-calentamiento,
 body.vista-juegos #btn-juegos {
     background: transparent;
@@ -352,7 +485,8 @@ body.vista-juegos #btn-juegos {
 }
 body.vista-calentamiento #btn-calentamiento:hover,
 body.vista-juegos #btn-juegos:hover { transform: none; }
-body.vista-ritmo #prueba-micro > .fila-pruebas { display: none; }
+body.vista-ritmo #prueba-micro > .fila-pruebas,
+body.vista-pajaro #prueba-micro > .fila-pruebas { display: none; }
 
 
 /* ===== Título de la canción junto al nombre del coro ===== */

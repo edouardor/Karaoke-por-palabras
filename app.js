@@ -81,6 +81,46 @@ const RITMO_DURACION_OK = 0.45;
 let metronomoRitmoActivo = true;         // clic de compás audible por defecto
 let ultimoBeatMetronomoRitmo = -999;     // índice de pulso musical (puede ser negativo)
 let velocidadRitmo = 1;                  // 1 = tempo de la partitura
+// ---- Juego del pájaro: la voz mueve el pájaro; las cerezas son las notas ----
+let modoPajaro = false;
+let estadoPajaro = "fin";                // 'calibracion' | 'prep' | 'jugando' | 'pausada' | 'fin'
+let midiBasePajaro = 48;
+let midiSuavePajaro = null;              // midi cantado suavizado
+let cerezasPajaro = [];                  // { midi, tLlegada, el, recogida, fallida }
+let melodiaPajaroBase = [];              // { midi, tiempo, duracion } antes de transponer
+let aciertosPajaro = 0;
+let animacionPajaroId = 0;
+let relojPajaro = { t0: 0, tiempoBase: 0 };
+let velocidadPajaro = 0.6;               // inicio al 60 % del tempo de la pieza
+let escenaMidiMin = 42;
+let escenaMidiMax = 60;
+const PIEZA_PAJARO_PRUEBA = "Frere Jacques";
+const PIEZAS_PAJARO_CON_CALIBRACION = [PIEZA_PAJARO_PRUEBA, "Cumpleanos Feliz"];
+const EMOJI_PAJARO = '<span class="emoji-pajaro">🐦</span>';
+function tituloPajaroHtml(conCereza) {
+    return conCereza ? `Pájaro ${EMOJI_PAJARO}🍒` : `Pájaro ${EMOJI_PAJARO}`;
+}
+const PAJARO_BPM = 80;
+const PAJARO_NEGRA = 60 / PAJARO_BPM;    // 0,75 s
+// Frère Jacques (prueba): { s: semitonos relativos al Do cantado, d: duración en negras, silaba }.
+const PAJARO_MELODIA_PRUEBA = [
+    { s: 0, d: 1, silaba: "Frè" }, { s: 2, d: 1, silaba: "re" }, { s: 4, d: 1, silaba: "Jac" }, { s: 0, d: 1, silaba: "ques" },
+    { s: 0, d: 1, silaba: "Frè" }, { s: 2, d: 1, silaba: "re" }, { s: 4, d: 1, silaba: "Jac" }, { s: 0, d: 1, silaba: "ques" },
+    { s: 4, d: 1, silaba: "Dor" }, { s: 5, d: 1, silaba: "mez" }, { s: 7, d: 2, silaba: "vous" },
+    { s: 4, d: 1, silaba: "Dor" }, { s: 5, d: 1, silaba: "mez" }, { s: 7, d: 2, silaba: "vous" },
+    { s: 7, d: 0.5, silaba: "Son" }, { s: 9, d: 0.5, silaba: "nez" }, { s: 7, d: 0.5, silaba: "les" }, { s: 5, d: 0.5, silaba: "ma" }, { s: 4, d: 1, silaba: "ti" }, { s: 0, d: 1, silaba: "nes" },
+    { s: 7, d: 0.5, silaba: "Son" }, { s: 9, d: 0.5, silaba: "nez" }, { s: 7, d: 0.5, silaba: "les" }, { s: 5, d: 0.5, silaba: "ma" }, { s: 4, d: 1, silaba: "ti" }, { s: 0, d: 1, silaba: "nes" },
+    // Ding dang dong: Do, Sol bajo el Do, Do (×2)
+    { s: 0, d: 1, silaba: "Ding" }, { s: -5, d: 1, silaba: "dang" }, { s: 0, d: 2, silaba: "dong" },
+    { s: 0, d: 1, silaba: "Ding" }, { s: -5, d: 1, silaba: "dang" }, { s: 0, d: 2, silaba: "dong" }
+];
+
+function esPiezaPajaroPrueba(pieza) {
+    return PIEZAS_PAJARO_CON_CALIBRACION.includes((pieza || "").trim());
+}
+const PAJARO_MARGEN_CENTS = 70;          // ventana para recoger cereza
+const PAJARO_ANTICIPO = 2.2;             // s: la cereza aparece a la derecha antes de llegar
+const PAJARO_X_PAJARO = 12;              // % desde la izquierda
 // ---- Modo karaoke: la melodía sigue sola y se puntúan las notas al vuelo ----
 let modoKaraoke = false;
 let estadoKaraoke = 'reproduciendo';     // 'cuenta' | 'reproduciendo' | 'pausada' | 'fin'
@@ -149,13 +189,24 @@ function enAyudaRitmo() {
     return document.body.classList.contains("vista-ritmo") || !!modoRitmo;
 }
 
+function enAyudaPajaro() {
+    return document.body.classList.contains("vista-pajaro") || !!modoPajaro;
+}
+
 function actualizarBotonAyuda() {
     const btn = document.getElementById("btn-ayuda");
     if (!btn) return;
-    btn.textContent = enAyudaRitmo() ? "Ayuda ritmo ❓" : "Ayuda ❓";
+    if (enAyudaPajaro()) btn.textContent = "Ayuda pájaro ❓";
+    else if (enAyudaRitmo()) btn.textContent = "Ayuda ritmo ❓";
+    else btn.textContent = "Ayuda ❓";
 }
 
 function abrirAyuda() {
+    if (enAyudaPajaro()) {
+        const dialogo = document.getElementById("ayuda-pajaro");
+        if (dialogo) dialogo.showModal();
+        return;
+    }
     if (enAyudaRitmo()) {
         const dialogo = document.getElementById("ayuda-ritmo");
         if (dialogo) dialogo.showModal();
@@ -167,8 +218,10 @@ function abrirAyuda() {
 function cerrarAyuda() {
     const general = document.getElementById("ayuda");
     const ritmo = document.getElementById("ayuda-ritmo");
+    const pajaro = document.getElementById("ayuda-pajaro");
     if (general && general.open) general.close();
     if (ritmo && ritmo.open) ritmo.close();
+    if (pajaro && pajaro.open) pajaro.close();
 }
 
 // El margen del menú (15, 30, 45 o 60 cents) es el que usa el entrenamiento y el karaoke.
@@ -244,10 +297,13 @@ function anotarJuegoHoy(nombreJuego, puntuacion) {
 
 function textoPiezaEstudiada(pieza) {
     if (pieza.tipo === "juego") {
-        let texto = `Juego ${pieza.juego || "Ritmo"} — ${pieza.titulo || "pieza"}`;
+        let texto = `Juego ${pieza.juego || "Ritmo"}`;
+        if (pieza.titulo && pieza.titulo !== pieza.juego) texto += ` — ${pieza.titulo}`;
         const p = pieza.puntuacion || {};
         if (typeof p.momento === "number" && typeof p.duracion === "number") {
             texto += ` — momento ${p.momento}% · duración ${p.duracion}%`;
+        } else if (typeof p.aciertos === "number" && typeof p.total === "number") {
+            texto += ` — ${p.aciertos} de ${p.total} cerezas`;
         }
         return texto;
     }
@@ -821,6 +877,7 @@ function cancelarTemporizadores() {
     limpiarSilencioEscucha();
     silenciarSonidoEscucha();
     detenerJuegoRitmo();
+    detenerJuegoPajaro();
     modoEscucha = false;
     modoKaraoke = false;
     notaEnJuicio = null;
@@ -833,8 +890,8 @@ function actualizarFlechas() {
     const btnAnt = document.getElementById('btn-anterior');
     const btnSig = document.getElementById('btn-siguiente');
     if (!btnAnt || !btnSig) return;
-    // En karaoke/ritmo la pieza va sola: las flechas no aplican.
-    if (modoKaraoke || modoRitmo) {
+    // En karaoke/ritmo/pájaro la pieza va sola: las flechas no aplican.
+    if (modoKaraoke || modoRitmo || modoPajaro) {
         btnAnt.style.visibility = 'hidden';
         btnSig.style.visibility = 'hidden';
         return;
@@ -1090,6 +1147,10 @@ function avanzarNotaEntrenamiento() {
 function bucleDeAudio() {
     requestAnimationFrame(bucleDeAudio);
     if (modoCalibracion) { procesarCalibracion(); return; }
+    if (modoPajaro) {
+        if (estadoPajaro === "calibracion") procesarCalibracionPajaro();
+        return;
+    }
     if (modoKaraoke || modoEscucha || modoRitmo) {
         actualizarLucesCompas();
         if (modoKaraoke) procesarKaraoke();
@@ -1585,18 +1646,22 @@ function mostrarJuegos() {
     ocultarResultadoMicrofono();
     cerrarCalentamientos(false);
     cerrarPantallaRitmo();
-    document.body.classList.remove("vista-ritmo");
+    cerrarPantallaPajaro();
+    document.body.classList.remove("vista-ritmo", "vista-pajaro");
     document.body.classList.add("vista-juegos");
     document.getElementById("lista-juegos").hidden = false;
     document.getElementById("botones-inicio").style.display = "none";
+    actualizarBotonAyuda();
 }
 
 function cerrarJuegos(restaurarBotones = true) {
     document.body.classList.remove("vista-juegos");
     document.body.classList.remove("vista-ritmo");
+    document.body.classList.remove("vista-pajaro");
     const lista = document.getElementById("lista-juegos");
     if (lista) lista.hidden = true;
     cerrarPantallaRitmo();
+    cerrarPantallaPajaro();
     if (restaurarBotones) document.getElementById("botones-inicio").style.display = "flex";
     actualizarBotonAyuda();
 }
@@ -1621,20 +1686,51 @@ function cerrarPantallaRitmo() {
     if (pantalla) pantalla.hidden = true;
 }
 
+function cerrarPantallaPajaro() {
+    const pantalla = document.getElementById("pantalla-pajaro");
+    if (pantalla) pantalla.hidden = true;
+}
+
 function mostrarPantallaRitmo() {
     ocultarResultadoMicrofono();
     rellenarSelectorRitmo();
+    cerrarPantallaPajaro();
     document.getElementById("lista-juegos").hidden = true;
-    document.body.classList.remove("vista-juegos");
+    document.body.classList.remove("vista-juegos", "vista-pajaro");
     document.body.classList.add("vista-ritmo");
     document.getElementById("pantalla-ritmo").hidden = false;
     document.getElementById("botones-inicio").style.display = "none";
     actualizarBotonAyuda();
 }
 
+function rellenarSelectorPajaro() {
+    const origen = document.getElementById("selector-cancion");
+    const destino = document.getElementById("selector-pajaro");
+    if (!origen || !destino) return;
+    const valor = destino.value || PIEZA_PAJARO_PRUEBA;
+    destino.innerHTML =
+        `<option value="${PIEZA_PAJARO_PRUEBA}">Frère Jacques (prueba)</option>` +
+        origen.innerHTML;
+    if ([...destino.options].some(o => o.value === valor)) destino.value = valor;
+    else destino.value = PIEZA_PAJARO_PRUEBA;
+}
+
+function mostrarPantallaPajaro() {
+    ocultarResultadoMicrofono();
+    cerrarPantallaRitmo();
+    rellenarSelectorPajaro();
+    document.getElementById("lista-juegos").hidden = true;
+    document.body.classList.remove("vista-juegos", "vista-ritmo");
+    document.body.classList.add("vista-pajaro");
+    document.getElementById("pantalla-pajaro").hidden = false;
+    document.getElementById("botones-inicio").style.display = "none";
+    actualizarBotonAyuda();
+}
+
 function volverAListaJuegos() {
     cerrarPantallaRitmo();
-    document.body.classList.remove("vista-ritmo");
+    cerrarPantallaPajaro();
+    document.body.classList.remove("vista-ritmo", "vista-pajaro");
     document.body.classList.add("vista-juegos");
     document.getElementById("lista-juegos").hidden = false;
     actualizarBotonAyuda();
@@ -1644,6 +1740,10 @@ function empezarJuego(numero) {
     if (numero < 1 || numero > 4) return;
     if (numero === 1) {
         mostrarPantallaRitmo();
+        return;
+    }
+    if (numero === 2) {
+        mostrarPantallaPajaro();
         return;
     }
 }
@@ -2228,6 +2328,534 @@ function terminarJuegoRitmo() {
     document.getElementById("zona-reinicio").style.display = "flex";
     actualizarControlesRitmo();
     actualizarLucesCompas();
+}
+
+// ==========================================
+// JUEGO 2: PÁJARO Y CEREZAS (tono de la voz)
+// ==========================================
+function midiAPorcentajePajaro(midi) {
+    const acotado = Math.max(escenaMidiMin, Math.min(escenaMidiMax, midi));
+    return ((escenaMidiMax - acotado) / Math.max(0.01, escenaMidiMax - escenaMidiMin)) * 100;
+}
+
+function actualizarMarcadorPajaro() {
+    const el = document.getElementById("marcador-pajaro");
+    const total = Math.max(1, melodiaPajaroBase.length || cerezasPajaro.length);
+    if (el) el.textContent = `${aciertosPajaro} / ${total}`;
+}
+
+function pintarLineasPajaro() {
+    const caja = document.getElementById("lineas-pajaro");
+    if (!caja) return;
+    caja.innerHTML = "";
+    const midis = new Set(cerezasPajaro.map(c => c.midi));
+    midis.add(midiBasePajaro);
+    [...midis].sort((a, b) => a - b).forEach(midi => {
+        const linea = document.createElement("div");
+        linea.className = "linea-tono-pajaro" + (midi === midiBasePajaro ? " base" : "");
+        linea.style.top = midiAPorcentajePajaro(midi) + "%";
+        caja.appendChild(linea);
+    });
+}
+
+function tiempoActualPajaro() {
+    return relojPajaro.tiempoBase + (performance.now() - relojPajaro.t0) / 1000 * velocidadPajaro;
+}
+
+function cambiarVelocidadPajaro(valor) {
+    const nueva = Math.max(0.5, Math.min(2, Number(valor) || 1));
+    const etiqueta = document.getElementById("txt-velocidad-pajaro");
+    const control = document.getElementById("velocidad-pajaro");
+    if (etiqueta) etiqueta.textContent = `×${nueva.toFixed(2).replace(/\.?0+$/, "")}`;
+    if (control && Number(control.value) !== nueva) control.value = String(nueva);
+    if (modoPajaro && (estadoPajaro === "jugando" || estadoPajaro === "pausada")) {
+        const ahora = tiempoActualPajaro();
+        relojPajaro = { t0: performance.now(), tiempoBase: ahora };
+    }
+    velocidadPajaro = nueva;
+}
+
+function actualizarControlesPajaro() {
+    const caja = document.getElementById("controles-pajaro");
+    if (!caja) return;
+    caja.style.display = modoPajaro ? "flex" : "none";
+    if (!modoPajaro) return;
+    document.getElementById("btn-pausa-pajaro").style.display = estadoPajaro === "jugando" ? "inline-block" : "none";
+    document.getElementById("btn-seguir-pajaro").style.display = estadoPajaro === "pausada" ? "inline-block" : "none";
+    document.getElementById("btn-repetir-pajaro").style.display = estadoPajaro === "fin" ? "inline-block" : "none";
+}
+
+function pausarPajaro() {
+    if (!modoPajaro || estadoPajaro !== "jugando") return;
+    relojPajaro = { t0: performance.now(), tiempoBase: tiempoActualPajaro() };
+    silenciarMelodia();
+    if (animacionPajaroId) {
+        cancelAnimationFrame(animacionPajaroId);
+        animacionPajaroId = 0;
+    }
+    estadoPajaro = "pausada";
+    const pajaro = document.getElementById("pajaro");
+    if (pajaro) pajaro.classList.remove("cantando");
+    document.getElementById("evaluacion").innerText = "⏸ Pájaro en pausa";
+    actualizarControlesPajaro();
+}
+
+function seguirPajaro() {
+    if (!modoPajaro || estadoPajaro !== "pausada") return;
+    if (!cerezasPajaro.length || cerezasPajaro.every(c => c.recogida || c.fallida)) {
+        terminarJuegoPajaro();
+        return;
+    }
+    estadoPajaro = "jugando";
+    relojPajaro = { t0: performance.now(), tiempoBase: relojPajaro.tiempoBase };
+    document.getElementById("evaluacion").innerText = "Recoge cada cereza con la voz";
+    animacionPajaroId = requestAnimationFrame(bucleJuegoPajaro);
+    actualizarControlesPajaro();
+}
+
+function detenerJuegoPajaro() {
+    if (animacionPajaroId) {
+        cancelAnimationFrame(animacionPajaroId);
+        animacionPajaroId = 0;
+    }
+    modoPajaro = false;
+    estadoPajaro = "fin";
+    midiSuavePajaro = null;
+    cerezasPajaro = [];
+    const escenario = document.getElementById("escenario-pajaro");
+    if (escenario) escenario.hidden = true;
+    const cerezas = document.getElementById("cerezas-pajaro");
+    if (cerezas) cerezas.innerHTML = "";
+    const cont = document.getElementById("controles-pajaro");
+    if (cont) cont.style.display = "none";
+    const btnVolver = document.getElementById("btn-volver-pajaro");
+    if (btnVolver) btnVolver.hidden = true;
+    actualizarBotonAyuda();
+}
+
+function volverAPantallaPajaro() {
+    detenerJuegoPajaro();
+    soltarMicrofono();
+    cancelarTemporizadores();
+    document.getElementById("titulo-cancion").style.display = "none";
+    document.getElementById("controles-escucha").style.display = "none";
+    document.getElementById("controles-karaoke").style.display = "none";
+    const contRitmo = document.getElementById("controles-ritmo");
+    if (contRitmo) contRitmo.style.display = "none";
+    const contPajaro = document.getElementById("controles-pajaro");
+    if (contPajaro) contPajaro.style.display = "none";
+    document.getElementById("status-box").style.display = "none";
+    document.getElementById("evaluacion").innerHTML = "";
+    document.getElementById("secuencia-visual").innerHTML = "";
+    document.getElementById("palabra-pantalla").innerText = "...";
+    document.getElementById("zona-reinicio").style.display = "none";
+    document.getElementById("btn-volver-calentamiento").hidden = true;
+    document.getElementById("btn-volver-ritmo").hidden = true;
+    document.getElementById("btn-volver-pajaro").hidden = true;
+    document.getElementById("zona-seleccion").style.display = "block";
+    document.getElementById("botones-inicio").style.display = "none";
+    mostrarPantallaPajaro();
+    actualizarBotonAyuda();
+}
+
+async function cargarMelodiaPajaro(pieza) {
+    if (pieza === PIEZA_PAJARO_PRUEBA) {
+        let t = 0;
+        melodiaPajaroBase = PAJARO_MELODIA_PRUEBA.map(n => {
+            const item = {
+                midi: 60 + n.s,
+                tiempo: t,
+                duracion: n.d * PAJARO_NEGRA,
+                silaba: n.silaba || ""
+            };
+            t += n.d * PAJARO_NEGRA;
+            return item;
+        });
+        tituloCancionActual = "Frère Jacques (prueba)";
+        cancionActual = PIEZA_PAJARO_PRUEBA;
+        return;
+    }
+
+    const [resNotas, resTexto] = await Promise.all([
+        cargarArchivoCancion(`${pieza}.json`),
+        cargarArchivoCancion(`${pieza} txt.json`)
+    ]);
+    if (!resNotas.ok) {
+        throw new Error(`No se encuentra «${pieza}.json» en la carpeta "canciones".`);
+    }
+    const datosNotas = await resNotas.json();
+    let notasRaw = datosNotas.notes || datosNotas;
+    if (datosNotas.tracks && Array.isArray(datosNotas.tracks)) {
+        const pista = datosNotas.tracks.find(t => t.notes && t.notes.length > 0);
+        if (pista) notasRaw = pista.notes;
+    }
+    if (!Array.isArray(notasRaw) || !notasRaw.length) {
+        throw new Error("Esta pieza no tiene notas para el pájaro.");
+    }
+
+    let titulo = pieza;
+    let lineasLetra = [];
+    if (resTexto.ok) {
+        try {
+            let datosTexto = await resTexto.json();
+            if (datosTexto.default) datosTexto = datosTexto.default;
+            if (datosTexto.titulo) titulo = datosTexto.titulo;
+            if (datosTexto.lineas && Array.isArray(datosTexto.lineas)) lineasLetra = datosTexto.lineas;
+            else if (Array.isArray(datosTexto)) lineasLetra = datosTexto;
+        } catch (e) { /* sin letra: las cerezas van sin sílaba */ }
+    }
+
+    const frases = armarFrasesDesdeLineas(lineasLetra, notasRaw);
+    const silabasPlanas = [];
+    frases.forEach(f => (f.silabas || []).forEach(s => silabasPlanas.push(s)));
+
+    const t0 = typeof notasRaw[0].time === "number" ? notasRaw[0].time : 0;
+    melodiaPajaroBase = notasRaw.map((n, i) => ({
+        midi: typeof n.midi === "number" ? n.midi : midiDesdeNombreIngles(n.name || n.note || "A3"),
+        tiempo: (typeof n.time === "number" ? n.time : 0) - t0,
+        duracion: n.duration || 0.4,
+        silaba: silabasPlanas[i] || ""
+    }));
+    tituloCancionActual = titulo;
+    cancionActual = pieza;
+}
+
+function prepararPantallaJuegoPajaro() {
+    document.body.classList.remove("vista-juegos", "vista-ritmo", "vista-pajaro");
+    document.getElementById("botones-inicio").style.display = "none";
+    document.getElementById("zona-seleccion").style.display = "none";
+    document.getElementById("zona-reinicio").style.display = "none";
+    document.getElementById("status-box").style.display = "block";
+    document.getElementById("btn-volver-calentamiento").hidden = true;
+    document.getElementById("btn-volver-ritmo").hidden = true;
+    document.getElementById("btn-volver-pajaro").hidden = false;
+    document.getElementById("controles-escucha").style.display = "none";
+    document.getElementById("controles-karaoke").style.display = "none";
+    const contRitmo = document.getElementById("controles-ritmo");
+    if (contRitmo) contRitmo.style.display = "none";
+    const zonaRitmo = document.getElementById("zona-pulso-ritmo");
+    if (zonaRitmo) zonaRitmo.hidden = true;
+    document.getElementById("secuencia-visual").innerHTML = "";
+    document.getElementById("evaluacion").innerHTML = "";
+    const elTitulo = document.getElementById("titulo-cancion");
+    if (elTitulo && tituloCancionActual) {
+        elTitulo.textContent = `· 🎼 ${tituloCancionActual}`;
+        elTitulo.style.display = "inline";
+    }
+}
+
+async function empezarPajaroConPieza() {
+    const sel = document.getElementById("selector-pajaro");
+    const pieza = ((sel && sel.value) || PIEZA_PAJARO_PRUEBA).trim();
+    if (!pieza) return;
+    try {
+        detenerPruebaMicrofono();
+        cancelarTemporizadores();
+        cerrarPantallaPajaro();
+        await cargarMelodiaPajaro(pieza);
+        prepararPantallaJuegoPajaro();
+
+        cambiarVelocidadPajaro(0.6);
+
+        await cargarPiano();
+        await asegurarMicrofono("entrenamiento");
+
+        modoPajaro = true;
+        aciertosPajaro = 0;
+        midiSuavePajaro = null;
+        actualizarBotonAyuda();
+        if (esPiezaPajaroPrueba(pieza)) iniciarCalibracionPajaro();
+        else prepararEntradaPajaro();
+        actualizarControlesPajaro();
+
+        if (!bucleAudioActivo) {
+            bucleAudioActivo = true;
+            bucleDeAudio();
+        }
+    } catch (err) {
+        document.getElementById("status-box").style.display = "block";
+        document.getElementById("palabra-pantalla").innerText = "Error";
+        document.getElementById("evaluacion").innerHTML =
+            `<span class='error'>❌ Error: ${err.message}</span>`;
+        document.getElementById("zona-reinicio").style.display = "flex";
+        document.getElementById("btn-volver-pajaro").hidden = false;
+    }
+}
+
+function reiniciarJuegoPajaro() {
+    if (!melodiaPajaroBase.length) {
+        empezarPajaroConPieza();
+        return;
+    }
+    if (animacionPajaroId) {
+        cancelAnimationFrame(animacionPajaroId);
+        animacionPajaroId = 0;
+    }
+    silenciarMelodia();
+    idGuia++; // cancela el tono de entrada si estaba sonando
+    aciertosPajaro = 0;
+    midiSuavePajaro = null;
+    cerezasPajaro = [];
+    document.getElementById("zona-reinicio").style.display = "none";
+    document.getElementById("secuencia-visual").innerHTML = "";
+    const escenario = document.getElementById("escenario-pajaro");
+    if (escenario) escenario.hidden = true;
+    if (esPiezaPajaroPrueba(cancionActual)) iniciarCalibracionPajaro();
+    else prepararEntradaPajaro();
+    actualizarControlesPajaro();
+}
+
+function prepararEntradaPajaro() {
+    if (!melodiaPajaroBase.length) return;
+    estadoPajaro = "prep";
+    muestrasCalibracion = [];
+    ponerGuiaSonando(false);
+    document.getElementById("btn-anterior").style.visibility = "hidden";
+    document.getElementById("btn-siguiente").style.visibility = "hidden";
+    document.getElementById("zona-reinicio").style.display = "none";
+    document.getElementById("escenario-pajaro").hidden = true;
+    document.getElementById("secuencia-visual").innerHTML = "";
+
+    midiBasePajaro = melodiaPajaroBase[0].midi;
+    midiSuavePajaro = midiBasePajaro;
+    const nombre = nombreEspanolDesdeMidi(midiBasePajaro);
+    document.getElementById("palabra-pantalla").innerText = nombre;
+    document.getElementById("evaluacion").innerText = "Tono · escucha la primera nota";
+    actualizarControlesPajaro();
+
+    idGuia++;
+    const idEjecucion = idGuia;
+    const duracionTono = Math.max(1.2, 1.6 / velocidadPajaro);
+    sonarNota(nombreInglesDesdeMidi(midiBasePajaro), duracionTono, VOLUMEN_MELODIA_GUIA);
+    setTimeout(() => {
+        if (!modoPajaro || estadoPajaro !== "prep" || idEjecucion !== idGuia) return;
+        silenciarMelodia();
+        arrancarPartidaPajaro();
+    }, Math.max(1200, duracionTono * 1000));
+}
+
+function iniciarCalibracionPajaro() {
+    estadoPajaro = "calibracion";
+    muestrasCalibracion = [];
+    ponerGuiaSonando(false);
+    document.getElementById("btn-anterior").style.visibility = "hidden";
+    document.getElementById("btn-siguiente").style.visibility = "hidden";
+    document.getElementById("zona-reinicio").style.display = "none";
+    document.getElementById("escenario-pajaro").hidden = true;
+    document.getElementById("palabra-pantalla").innerText = "🎤 Canta tu primera nota";
+    const nombrePieza = tituloCancionActual || "la melodía";
+    document.getElementById("secuencia-visual").innerHTML =
+        "<div style='font-size:16px; color:#aaa; line-height:1.5; max-width:420px;'>" +
+        "Elige una nota cómoda, ni muy grave ni muy aguda, y mantenla un momento. " +
+        `Las cerezas seguirán «${nombrePieza}» a partir de esa nota.</div>`;
+    document.getElementById("evaluacion").innerText = "Esperando tu voz...";
+    actualizarControlesPajaro();
+}
+
+function procesarCalibracionPajaro() {
+    if (!modoPajaro || estadoPajaro !== "calibracion") return;
+    const mensaje = document.getElementById("evaluacion");
+    analyser.getFloatTimeDomainData(dataArray);
+    const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
+
+    if (frecuencia === -1 || frecuencia < 60 || frecuencia > 1000) {
+        muestrasCalibracion = [];
+        return;
+    }
+
+    muestrasCalibracion.push(69 + 12 * Math.log2(frecuencia / 440));
+    if (muestrasCalibracion.length > MUESTRAS_CALIBRACION) muestrasCalibracion.shift();
+    if (muestrasCalibracion.length < MUESTRAS_CALIBRACION) {
+        mensaje.innerText = "Detectando tu nota...";
+        return;
+    }
+
+    const maximo = Math.max(...muestrasCalibracion);
+    const minimo = Math.min(...muestrasCalibracion);
+    if (maximo - minimo > 0.7) {
+        mensaje.innerText = "Mantén la nota estable...";
+        return;
+    }
+
+    const media = muestrasCalibracion.reduce((a, b) => a + b, 0) / muestrasCalibracion.length;
+    const notaMidi = Math.round(media);
+    const nombre = nombreEspanolDesdeMidi(notaMidi);
+
+    if (notaMidi < MIDI_MIN_PRIMERA_NOTA || notaMidi > MIDI_MAX_PRIMERA_NOTA) {
+        mensaje.innerText =
+            `${nombre} queda fuera de rango. Prueba con una nota entre ` +
+            `${nombreEspanolDesdeMidi(MIDI_MIN_PRIMERA_NOTA)} y ${nombreEspanolDesdeMidi(MIDI_MAX_PRIMERA_NOTA)}.`;
+        muestrasCalibracion = [];
+        return;
+    }
+
+    muestrasCalibracion = [];
+    midiBasePajaro = notaMidi;
+    midiSuavePajaro = notaMidi;
+    estadoPajaro = "prep";
+    mensaje.innerHTML = `<span class='success'>✔ Primera nota: ${nombre}. ¡Allá vamos!</span>`;
+    document.getElementById("secuencia-visual").innerHTML = "";
+    document.getElementById("palabra-pantalla").innerHTML = tituloPajaroHtml(false);
+    actualizarControlesPajaro();
+
+    ponerGuiaSonando(true);
+    sonarNota(nombreInglesDesdeMidi(notaMidi), 1.1, VOLUMEN_MELODIA_GUIA);
+    setTimeout(() => {
+        if (!modoPajaro || estadoPajaro !== "prep") return;
+        ponerGuiaSonando(false);
+        arrancarPartidaPajaro();
+    }, 1400);
+}
+
+function arrancarPartidaPajaro() {
+    if (!modoPajaro || !melodiaPajaroBase.length) return;
+    estadoPajaro = "jugando";
+    aciertosPajaro = 0;
+    const midiOriginal0 = melodiaPajaroBase[0].midi;
+    const desplazamiento = midiBasePajaro - midiOriginal0;
+    const midis = melodiaPajaroBase.map(n => n.midi + desplazamiento);
+    escenaMidiMin = Math.min(...midis) - 1;
+    escenaMidiMax = Math.max(...midis) + 1;
+
+    document.getElementById("evaluacion").innerText = "Recoge cada cereza con la voz";
+    document.getElementById("secuencia-visual").innerHTML = "";
+    const escenario = document.getElementById("escenario-pajaro");
+    escenario.hidden = false;
+    const pajaro = document.getElementById("pajaro");
+    pajaro.style.top = midiAPorcentajePajaro(midiBasePajaro) + "%";
+    pajaro.classList.remove("recogiendo", "cantando");
+
+    const cajaCerezas = document.getElementById("cerezas-pajaro");
+    cajaCerezas.innerHTML = "";
+    cerezasPajaro = melodiaPajaroBase.map((nota, i) => {
+        const midi = midis[i];
+        const el = document.createElement("div");
+        el.className = "cereza-pajaro";
+        const icono = document.createElement("span");
+        icono.className = "cereza-icono";
+        icono.setAttribute("aria-hidden", "true");
+        icono.textContent = "🍒";
+        const textoSilaba = document.createElement("span");
+        textoSilaba.className = "cereza-silaba";
+        textoSilaba.textContent = nota.silaba || "";
+        el.appendChild(icono);
+        el.appendChild(textoSilaba);
+        el.style.top = midiAPorcentajePajaro(midi) + "%";
+        el.style.left = "110%";
+        cajaCerezas.appendChild(el);
+        return {
+            midi,
+            duracion: nota.duracion,
+            tLlegada: nota.tiempo,
+            silaba: nota.silaba || "",
+            el,
+            recogida: false,
+            fallida: false
+        };
+    });
+    pintarLineasPajaro();
+    actualizarMarcadorPajaro();
+    relojPajaro = { t0: performance.now(), tiempoBase: 0 };
+    actualizarControlesPajaro();
+    if (animacionPajaroId) cancelAnimationFrame(animacionPajaroId);
+    animacionPajaroId = requestAnimationFrame(bucleJuegoPajaro);
+}
+
+function leerMidiVozPajaro() {
+    if (!analyser || !dataArray || !audioContext) return null;
+    analyser.getFloatTimeDomainData(dataArray);
+    const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
+    if (frecuencia === -1 || frecuencia < 60 || frecuencia > 1000) return null;
+    return 69 + 12 * Math.log2(frecuencia / 440);
+}
+
+function bucleJuegoPajaro() {
+    if (!modoPajaro || estadoPajaro !== "jugando") {
+        animacionPajaroId = 0;
+        return;
+    }
+    const t = tiempoActualPajaro();
+    const midiVoz = leerMidiVozPajaro();
+    if (midiVoz != null) {
+        if (midiSuavePajaro == null) midiSuavePajaro = midiVoz;
+        else midiSuavePajaro = midiSuavePajaro * 0.72 + midiVoz * 0.28;
+    }
+    const pajaro = document.getElementById("pajaro");
+    if (pajaro) {
+        if (midiSuavePajaro != null) {
+            pajaro.style.top = midiAPorcentajePajaro(midiSuavePajaro) + "%";
+        }
+        pajaro.classList.toggle("cantando", midiVoz != null);
+    }
+
+    cerezasPajaro.forEach(cereza => {
+        if (cereza.recogida || cereza.fallida) return;
+        const x = PAJARO_X_PAJARO + ((cereza.tLlegada - t) / PAJARO_ANTICIPO) * (100 - PAJARO_X_PAJARO);
+        cereza.el.style.left = x + "%";
+        cereza.el.style.top = midiAPorcentajePajaro(cereza.midi) + "%";
+
+        const ventana = Math.max(0.18, Math.min(0.28, cereza.duracion * 0.45));
+        const cercaX = Math.abs(t - cereza.tLlegada) <= ventana;
+        if (cercaX && midiSuavePajaro != null) {
+            const cents = (midiSuavePajaro - cereza.midi) * 100;
+            if (Math.abs(cents) <= PAJARO_MARGEN_CENTS) {
+                cereza.recogida = true;
+                cereza.el.classList.add("recogida");
+                aciertosPajaro++;
+                actualizarMarcadorPajaro();
+                // Solo suena al tocar la cereza, no antes.
+                const durGuia = Math.max(0.28, Math.min(0.7, cereza.duracion * 0.85));
+                sonarNota(nombreInglesDesdeMidi(cereza.midi), durGuia, VOLUMEN_MELODIA * 0.9);
+                if (pajaro) {
+                    pajaro.classList.add("recogiendo");
+                    setTimeout(() => pajaro.classList.remove("recogiendo"), 180);
+                }
+                return;
+            }
+        }
+        if (t > cereza.tLlegada + ventana + 0.12) {
+            cereza.fallida = true;
+            cereza.el.classList.add("fallida");
+        }
+    });
+
+    const ultima = cerezasPajaro[cerezasPajaro.length - 1];
+    if (ultima && t > ultima.tLlegada + Math.max(0.9, ultima.duracion + 0.4)) {
+        terminarJuegoPajaro();
+        return;
+    }
+    animacionPajaroId = requestAnimationFrame(bucleJuegoPajaro);
+}
+
+function terminarJuegoPajaro() {
+    if (!modoPajaro || estadoPajaro === "fin") return;
+    estadoPajaro = "fin";
+    if (animacionPajaroId) {
+        cancelAnimationFrame(animacionPajaroId);
+        animacionPajaroId = 0;
+    }
+    ponerGuiaSonando(false);
+    silenciarMelodia();
+    const pajaro = document.getElementById("pajaro");
+    if (pajaro) pajaro.classList.remove("cantando", "recogiendo");
+    const total = Math.max(1, melodiaPajaroBase.length);
+    document.getElementById("palabra-pantalla").innerHTML = tituloPajaroHtml(true);
+    document.getElementById("secuencia-visual").innerHTML = "";
+    const resumen = document.createElement("div");
+    resumen.className = "resumen-final";
+    resumen.innerHTML =
+        `<div class="resumen-logro">Cerezas: ${aciertosPajaro} de ${total}.</div>` +
+        `<div class="resumen-titulo">${aciertosPajaro >= total
+            ? "¡Todas! El pájaro voló contigo."
+            : aciertosPajaro >= Math.ceil(total * 0.6)
+                ? "Buen vuelo. Sigue afinando con la voz."
+                : "Prueba otra vez: sube y baja la voz con calma."}</div>`;
+    document.getElementById("secuencia-visual").appendChild(resumen);
+    document.getElementById("evaluacion").innerHTML = "";
+    anotarJuegoHoy("Pájaro", { aciertos: aciertosPajaro, total });
+    document.getElementById("zona-reinicio").style.display = "flex";
+    actualizarControlesPajaro();
+    actualizarBotonAyuda();
 }
 
 function volverACalentamientos() {
@@ -3565,8 +4193,14 @@ function regresarAlMenu() {
     document.getElementById("btn-volver-calentamiento").hidden = true;
     const btnRitmo = document.getElementById("btn-volver-ritmo");
     if (btnRitmo) btnRitmo.hidden = true;
+    const btnPajaro = document.getElementById("btn-volver-pajaro");
+    if (btnPajaro) btnPajaro.hidden = true;
     const zonaRitmo = document.getElementById("zona-pulso-ritmo");
     if (zonaRitmo) zonaRitmo.hidden = true;
+    const escenario = document.getElementById("escenario-pajaro");
+    if (escenario) escenario.hidden = true;
+    const contPajaro = document.getElementById("controles-pajaro");
+    if (contPajaro) contPajaro.style.display = "none";
     cerrarApartadosMenu();
     actualizarBotonAyuda();
 }

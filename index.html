@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Frases Karaoke - Coro Canticorum</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=pajaro3">
     
 </head>
 <body>
@@ -51,6 +51,18 @@
         <button type="button" class="btn-ayuda-cerrar" onclick="cerrarAyuda()">Entendido</button>
     </dialog>
 
+    <dialog id="ayuda-pajaro" class="ayuda" onclick="if (event.target === this) cerrarAyuda()">
+        <h3>Ayuda pájaro</h3>
+        <ol>
+            <li><strong>De qué se trata:</strong> un pájaro sube o baja con el <strong>tono de tu voz</strong> y tiene que recoger cerezas colocadas a la altura de cada nota.</li>
+            <li><strong>Cómo se empieza:</strong> eliges una pieza. En las de <strong>prueba</strong> (Frère Jacques, Cumpleaños Feliz) cantas una nota cómoda y la melodía se coloca ahí. En las demás oyes la primera nota, como en karaoke, y las cerezas llevan la sílaba debajo.</li>
+            <li><strong>Cómo se juega:</strong> canta más agudo para subir el pájaro y más grave para bajarlo. El pico se abre al cantar. Recoge cada cereza cuando pasa por él: solo entonces suena la nota.</li>
+            <li><strong>Controles:</strong> puedes cambiar la velocidad, pausar y seguir, o repetir la partida.</li>
+        </ol>
+        <p class="ayuda-aviso">Si no llega voz, el pájaro se queda quieto. Con auriculares el micrófono oye mejor tu voz y no la guía.</p>
+        <button type="button" class="btn-ayuda-cerrar" onclick="cerrarAyuda()">Entendido</button>
+    </dialog>
+
     <dialog id="canciones-hoy" class="ayuda" onclick="if (event.target === this) cerrarCancionesHoy()">
         <h3 id="titulo-canciones-hoy">Enhorabuena</h3>
         <p id="enhorabuena-hoy" class="enhorabuena-hoy"></p>
@@ -82,6 +94,7 @@
                 </div>
                 <div class="fila-juego">
                     <button type="button" onclick="empezarJuego(2)">2</button>
+                    <span class="etiqueta-juego">pájaro <span class="emoji-pajaro">🐦</span>🍒</span>
                 </div>
                 <div class="fila-juego">
                     <button type="button" onclick="empezarJuego(3)">3</button>
@@ -102,6 +115,17 @@
                 </label>
                 <div class="acciones-ritmo">
                     <button type="button" class="btn-empezar-ritmo" onclick="empezarRitmoConPieza()">Empezar ritmo ▶</button>
+                    <button type="button" class="btn-volver-juegos" onclick="volverAListaJuegos()">← Juegos</button>
+                </div>
+            </div>
+            <div id="pantalla-pajaro" class="pantalla-ritmo" hidden>
+                <h3 class="titulo-apartado-juego">Juegos</h3>
+                <h4 class="titulo-juego-activo">Pájaro <span class="emoji-pajaro">🐦</span>🍒</h4>
+                <label for="selector-pajaro" class="etiqueta-elige-ritmo">Elige una pieza para el pájaro:</label>
+                <select id="selector-pajaro"></select>
+                <p class="ayuda-ritmo">El pájaro sube y baja con tu voz y recoge las cerezas (con la sílaba debajo). En las piezas de prueba eliges la nota de partida; en las demás oyes la primera nota, como en los otros modos.</p>
+                <div class="acciones-ritmo">
+                    <button type="button" class="btn-empezar-ritmo" onclick="empezarPajaroConPieza()">Empezar pájaro ▶</button>
                     <button type="button" class="btn-volver-juegos" onclick="volverAListaJuegos()">← Juegos</button>
                 </div>
             </div>
@@ -163,6 +187,7 @@
             <button class="btn-home" onclick="regresarAlMenu()" aria-label="Volver al inicio" title="Volver al inicio">Inicio 🏠</button>
             <button type="button" id="btn-volver-calentamiento" class="btn-home" hidden onclick="volverACalentamientos()">Calentamiento 🔥</button>
             <button type="button" id="btn-volver-ritmo" class="btn-home" hidden onclick="volverAPantallaRitmo()">Ritmo <img src="./imagenes/tambor-ritmo.jpg?v=2" alt="" class="icono-tambor"></button>
+            <button type="button" id="btn-volver-pajaro" class="btn-home" hidden onclick="volverAPantallaPajaro()">Pájaro <span class="emoji-pajaro">🐦</span></button>
         </div>
 
         <div class="navegacion-palabra">
@@ -173,6 +198,27 @@
         <div id="compas-karaoke" class="compas-karaoke" hidden></div>
         <div id="zona-pulso-ritmo" class="zona-pulso-ritmo" hidden tabindex="0">
             <span id="aviso-ritmo">Pulsa la pantalla o la barra espaciadora al ritmo. Mantén para la duración.</span>
+        </div>
+        <div id="escenario-pajaro" class="escenario-pajaro" hidden>
+            <div id="marcador-pajaro" class="marcador-pajaro">0 / 32</div>
+            <div id="lineas-pajaro" class="lineas-pajaro" aria-hidden="true"></div>
+            <div id="pajaro" class="pajaro" aria-hidden="true">
+                <svg class="pajaro-dibujo" viewBox="0 0 88 60" width="56" height="40" aria-hidden="true">
+                    <!-- Cuerpo / cola a la izquierda, cabeza y pico a la derecha (mira a las cerezas). -->
+                    <ellipse cx="38" cy="34" rx="22" ry="16" fill="#f0a202"/>
+                    <path d="M18 36 Q4 28 14 22 Q22 28 20 38 Z" fill="#e08900"/>
+                    <ellipse cx="58" cy="28" rx="14" ry="12" fill="#f6b73c"/>
+                    <circle cx="62" cy="25" r="3.2" fill="#1a1a1a"/>
+                    <circle cx="63.2" cy="24" r="1.1" fill="#fff"/>
+                    <path class="pico-cerrado" d="M70 27 L86 30 L70 34 Z" fill="#e85d04"/>
+                    <g class="pico-abierto">
+                        <path d="M70 24 L88 20 L70 30 Z" fill="#e85d04"/>
+                        <path d="M70 31 L88 40 L70 36 Z" fill="#d00000"/>
+                    </g>
+                    <ellipse cx="28" cy="44" rx="7" ry="3.5" fill="#c97800"/>
+                </svg>
+            </div>
+            <div id="cerezas-pajaro" class="cerezas-pajaro"></div>
         </div>
         <div id="secuencia-visual" class="secuencia-cajas"></div>
 
@@ -202,6 +248,15 @@
             <button id="btn-seguir-ritmo" class="btn-escucha" onclick="seguirRitmo()" style="display: none;">Seguir ritmo ▶</button>
             <button id="btn-repetir-ritmo" class="btn-escucha" onclick="iniciarJuegoRitmo()" style="display: none;">Otra vez ↺</button>
         </div>
+
+        <div id="controles-pajaro" class="controles-escucha" style="display: none;">
+            <label class="control-velocidad" for="velocidad-pajaro">Velocidad <span id="txt-velocidad-pajaro">×0.6</span>
+                <input type="range" id="velocidad-pajaro" min="0.5" max="2" value="0.6" step="0.05" oninput="cambiarVelocidadPajaro(this.value)">
+            </label>
+            <button id="btn-pausa-pajaro" class="btn-pausa" onclick="pausarPajaro()" aria-label="Pausa" title="Pausa">Pausa ❚❚</button>
+            <button id="btn-seguir-pajaro" class="btn-escucha" onclick="seguirPajaro()" style="display: none;">Seguir pájaro ▶</button>
+            <button id="btn-repetir-pajaro" class="btn-escucha" onclick="reiniciarJuegoPajaro()" style="display: none;">Otra vez ↺</button>
+        </div>
         
         <div id="zona-reinicio" style="display: none;">
             <button type="button" class="btn-hoy" onclick="abrirCancionesHoy()">Canciones estudiadas hoy 📋</button>
@@ -212,6 +267,6 @@
 
     <!--cargamos el motor -->
     
-    <script src="./app.js?v=piano37"></script>
+    <script src="./app.js?v=piano47"></script>
 </body>
 </html>
