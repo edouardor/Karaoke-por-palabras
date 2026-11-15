@@ -75,7 +75,7 @@ let aciertosDuracionRitmo = 0;
 let notasJuzgadasRitmo = 0;
 const RITMO_VENTANA_BIEN = 0.12;         // s: ataque muy bueno
 const RITMO_VENTANA_OK = 0.25;           // s: ataque aceptable
-const RITMO_VENTANA_PRIMERA = 0.42;      // 1ª nota tras la cuenta: más margen
+const RITMO_VENTANA_PRIMERA = 0.45;      // 1ª nota en el downbeat: más margen
 const RITMO_DURACION_BIEN = 0.25;        // error relativo de duración
 const RITMO_DURACION_OK = 0.45;
 let metronomoRitmoActivo = true;         // clic de compás audible por defecto
@@ -145,12 +145,30 @@ const MIDI_MAX_PRIMERA_NOTA = 64;        // Mi4 (la melodía sube hasta una octa
 const NOMBRES_NOTA_INGLES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 const NOMBRES_NOTA_ESPANOL = ["Do","Do#","Re","Re#","Mi","Fa","Fa#","Sol","Sol#","La","La#","Si"];
 
+function enAyudaRitmo() {
+    return document.body.classList.contains("vista-ritmo") || !!modoRitmo;
+}
+
+function actualizarBotonAyuda() {
+    const btn = document.getElementById("btn-ayuda");
+    if (!btn) return;
+    btn.textContent = enAyudaRitmo() ? "Ayuda ritmo ❓" : "Ayuda ❓";
+}
+
 function abrirAyuda() {
-    document.getElementById('ayuda').showModal();
+    if (enAyudaRitmo()) {
+        const dialogo = document.getElementById("ayuda-ritmo");
+        if (dialogo) dialogo.showModal();
+        return;
+    }
+    document.getElementById("ayuda").showModal();
 }
 
 function cerrarAyuda() {
-    document.getElementById('ayuda').close();
+    const general = document.getElementById("ayuda");
+    const ritmo = document.getElementById("ayuda-ritmo");
+    if (general && general.open) general.close();
+    if (ritmo && ritmo.open) ritmo.close();
 }
 
 // El margen del menú (15, 30, 45 o 60 cents) es el que usa el entrenamiento y el karaoke.
@@ -1580,6 +1598,7 @@ function cerrarJuegos(restaurarBotones = true) {
     if (lista) lista.hidden = true;
     cerrarPantallaRitmo();
     if (restaurarBotones) document.getElementById("botones-inicio").style.display = "flex";
+    actualizarBotonAyuda();
 }
 
 function cerrarApartadosMenu() {
@@ -1610,6 +1629,7 @@ function mostrarPantallaRitmo() {
     document.body.classList.add("vista-ritmo");
     document.getElementById("pantalla-ritmo").hidden = false;
     document.getElementById("botones-inicio").style.display = "none";
+    actualizarBotonAyuda();
 }
 
 function volverAListaJuegos() {
@@ -1617,6 +1637,7 @@ function volverAListaJuegos() {
     document.body.classList.remove("vista-ritmo");
     document.body.classList.add("vista-juegos");
     document.getElementById("lista-juegos").hidden = false;
+    actualizarBotonAyuda();
 }
 
 function empezarJuego(numero) {
@@ -1643,6 +1664,27 @@ function empezarRitmoConPieza() {
 
 function ventanaAtaqueRitmo(indice) {
     return indice === 0 ? RITMO_VENTANA_PRIMERA : RITMO_VENTANA_OK;
+}
+
+// True si la nota cae en el primer tiempo del compás (sin anacrusa).
+function notaEnPrimerTiempoDelCompas(tiempo) {
+    const firma = firmaEnTiempo(Math.max(0, tiempo || 0));
+    const durCompas = Math.max(0.01, (firma.pulsos || 4) * (firma.segundosPorPulso || 0.6));
+    const origen = firma.time || 0;
+    const pos = (((tiempo || 0) - origen) % durCompas + durCompas) % durCompas;
+    return pos <= 0.06;
+}
+
+function arrancarReproduccionRitmo(zona, anticipoMusical) {
+    estadoRitmo = "reproduciendo";
+    mostrarPalabraRitmo(0);
+    activarListenersRitmo();
+    if (zona) zona.focus();
+    ultimoBeatMetronomoRitmo = -999;
+    relojRitmo = { t0: performance.now(), tiempoBase: -(anticipoMusical || 0) };
+    animacionRitmoId = requestAnimationFrame(bucleJuegoRitmo);
+    actualizarMarcadorRitmo();
+    actualizarControlesRitmo();
 }
 
 function beatIndexRitmo(tiempoMusical) {
@@ -1681,6 +1723,7 @@ function volverAPantallaRitmo() {
     document.getElementById("zona-seleccion").style.display = "block";
     document.getElementById("botones-inicio").style.display = "none";
     mostrarPantallaRitmo();
+    actualizarBotonAyuda();
 }
 
 function construirNotasRitmo() {
@@ -1791,17 +1834,23 @@ function detenerJuegoRitmo() {
     estadoRitmo = "fin";
     const caja = document.getElementById("controles-ritmo");
     if (caja) caja.style.display = "none";
+    actualizarBotonAyuda();
 }
 
 function activarListenersRitmo() {
     if (listenersRitmoActivos) return;
     listenersRitmoActivos = true;
+    document.body.classList.add("jugando-ritmo");
     const zona = document.getElementById("zona-pulso-ritmo");
     if (zona) {
         zona.addEventListener("pointerdown", onRitmoPointerDown);
         zona.addEventListener("pointerup", onRitmoPointerUp);
         zona.addEventListener("pointercancel", onRitmoPointerUp);
-        zona.addEventListener("pointerleave", onRitmoPointerUp);
+        // En móvil, touchstart con preventDefault evita la lupa y el menú al mantener.
+        zona.addEventListener("touchstart", onRitmoTouchStart, { passive: false });
+        zona.addEventListener("touchend", onRitmoTouchEnd, { passive: false });
+        zona.addEventListener("touchcancel", onRitmoTouchEnd, { passive: false });
+        zona.addEventListener("contextmenu", onRitmoContextMenu);
     }
     window.addEventListener("keydown", onRitmoKeyDown);
     window.addEventListener("keyup", onRitmoKeyUp);
@@ -1810,19 +1859,47 @@ function activarListenersRitmo() {
 function quitarListenersRitmo() {
     if (!listenersRitmoActivos) return;
     listenersRitmoActivos = false;
+    document.body.classList.remove("jugando-ritmo");
     const zona = document.getElementById("zona-pulso-ritmo");
     if (zona) {
         zona.removeEventListener("pointerdown", onRitmoPointerDown);
         zona.removeEventListener("pointerup", onRitmoPointerUp);
         zona.removeEventListener("pointercancel", onRitmoPointerUp);
-        zona.removeEventListener("pointerleave", onRitmoPointerUp);
+        zona.removeEventListener("touchstart", onRitmoTouchStart);
+        zona.removeEventListener("touchend", onRitmoTouchEnd);
+        zona.removeEventListener("touchcancel", onRitmoTouchEnd);
+        zona.removeEventListener("contextmenu", onRitmoContextMenu);
     }
     window.removeEventListener("keydown", onRitmoKeyDown);
     window.removeEventListener("keyup", onRitmoKeyUp);
 }
 
+function onRitmoContextMenu(ev) {
+    ev.preventDefault();
+}
+
+function onRitmoTouchStart(ev) {
+    if (!modoRitmo) return;
+    ev.preventDefault();
+    if (estadoRitmo === "pausada") {
+        seguirRitmo();
+        return;
+    }
+    if (estadoRitmo !== "reproduciendo") return;
+    iniciarPulsacionRitmo("touch");
+}
+
+function onRitmoTouchEnd(ev) {
+    if (!modoRitmo) return;
+    ev.preventDefault();
+    if (estadoRitmo !== "reproduciendo") return;
+    soltarPulsacionRitmo("touch");
+}
+
 function onRitmoPointerDown(ev) {
     if (!modoRitmo) return;
+    // En táctil ya gestiona touchstart (así se puede cancelar la lupa del sistema).
+    if (ev.pointerType === "touch") return;
     if (estadoRitmo === "pausada") {
         ev.preventDefault();
         seguirRitmo();
@@ -1839,6 +1916,7 @@ function onRitmoPointerDown(ev) {
 
 function onRitmoPointerUp(ev) {
     if (!modoRitmo || estadoRitmo !== "reproduciendo") return;
+    if (ev && ev.pointerType === "touch") return;
     if (ev) ev.preventDefault();
     soltarPulsacionRitmo("pointer");
 }
@@ -2076,6 +2154,7 @@ function iniciarJuegoRitmo() {
     alCambiarMetronomoRitmo();
     ultimoBeatMetronomoRitmo = -999;
     actualizarControlesRitmo();
+    actualizarBotonAyuda();
     // Cuenta de un compás, luego arranca el reloj musical en 0.
     estadoRitmo = "cuenta";
     pulsoCompasMarcado = 0;
@@ -2083,28 +2162,23 @@ function iniciarJuegoRitmo() {
     idGuia++;
     const idEjecucion = idGuia;
     let quedan = pulsosPorCompas;
+    const primeraEnDownbeat = !!(notasRitmo[0] && notaEnPrimerTiempoDelCompas(notasRitmo[0].tiempo));
     const pulsar = () => {
         if (!modoRitmo || idEjecucion !== idGuia || estadoRitmo === "pausada") return;
         if (quedan < 1) {
-            // Prepara UI y listeners antes del reloj. Si la 1ª nota está en t≈0,
-            // anticipamos un pulso para poder atacar el downbeat con margen.
-            estadoRitmo = "reproduciendo";
-            mostrarPalabraRitmo(0);
-            activarListenersRitmo();
-            zona.focus();
-            const primera = notasRitmo[0];
-            const anticipoMusical = (primera && primera.tiempo <= 0.05) ? segundosPorPulso : 0;
-            ultimoBeatMetronomoRitmo = -999;
-            relojRitmo = { t0: performance.now(), tiempoBase: -anticipoMusical };
-            animacionRitmoId = requestAnimationFrame(bucleJuegoRitmo);
-            actualizarMarcadorRitmo();
-            actualizarControlesRitmo();
+            // Piezas con anacrusa: arranque en 0 tras la cuenta.
+            arrancarReproduccionRitmo(zona, 0);
             return;
         }
         mostrarCuentaKaraoke(String(quedan), "");
         pulsoCompasMarcado = pulsosPorCompas - quedan + 1;
         actualizarLucesCompas();
         if (metronomoRitmoActivo) clicDeCompas(quedan === pulsosPorCompas);
+        // Si la 1ª nota es el primer tiempo, el pulso tras el «1» es ya su ataque.
+        if (quedan === 1 && primeraEnDownbeat) {
+            arrancarReproduccionRitmo(zona, segundosPorPulso);
+            return;
+        }
         quedan--;
         setTimeout(pulsar, segundosPorPulso * 1000 / velocidadRitmo);
     };
@@ -3494,6 +3568,7 @@ function regresarAlMenu() {
     const zonaRitmo = document.getElementById("zona-pulso-ritmo");
     if (zonaRitmo) zonaRitmo.hidden = true;
     cerrarApartadosMenu();
+    actualizarBotonAyuda();
 }
 
 cargarPiano();

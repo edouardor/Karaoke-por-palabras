@@ -33,6 +33,24 @@
         <button type="button" class="btn-ayuda-cerrar" onclick="cerrarAyuda()">Entendido</button>
     </dialog>
 
+    <dialog id="ayuda-ritmo" class="ayuda" onclick="if (event.target === this) cerrarAyuda()">
+        <h3>Ayuda ritmo</h3>
+        <ol>
+            <li><strong>De qué se trata:</strong> es un juego de pulso. Eliges una pieza y sigues su ritmo sin micrófono: no se valora la afinación, solo <strong>cuándo</strong> pulsas y <strong>cuánto</strong> mantienes.</li>
+            <li><strong>Cómo se juega:</strong> suena una cuenta de un compás (y, si quieres, el metrónomo). Luego pulsa la pantalla o la <strong>barra espaciadora</strong> en el momento de cada nota y <strong>mantén</strong> pulsado durante su duración. La melodía solo se oye mientras pulsas. Puedes cambiar la velocidad, pausar y seguir (también con un toque o con la barra espaciadora).</li>
+            <li><strong>Colores de las celdas:</strong> al pulsar se colorea por el ataque; al soltar se tiene en cuenta también la duración.
+                <ul>
+                    <li><strong style="color:#00e676">Verde</strong>: momento y duración buenos.</li>
+                    <li><strong style="color:#ffd740">Amarillo</strong>: aceptable, pero no del todo preciso.</li>
+                    <li><strong style="color:#ff5252">Rojo</strong>: fuera de tiempo o con duración incorrecta (o nota sin pulsar).</li>
+                </ul>
+            </li>
+            <li><strong>Cómo se puntúa:</strong> al final ves el porcentaje de notas con buen <strong>momento</strong> y con buena <strong>duración</strong>. Esa partida queda anotada en «Canciones estudiadas hoy» junto con la pieza.</li>
+        </ol>
+        <p class="ayuda-aviso">Si una celda pasa de verde a amarillo o rojo al soltar, suele ser porque la duración no encajó, aunque el ataque fuera bueno.</p>
+        <button type="button" class="btn-ayuda-cerrar" onclick="cerrarAyuda()">Entendido</button>
+    </dialog>
+
     <dialog id="canciones-hoy" class="ayuda" onclick="if (event.target === this) cerrarCancionesHoy()">
         <h3 id="titulo-canciones-hoy">Enhorabuena</h3>
         <p id="enhorabuena-hoy" class="enhorabuena-hoy"></p>
@@ -194,6 +212,6 @@
 
     <!--cargamos el motor -->
     
-    <script src="./app.js?v=piano34"></script>
+    <script src="./app.js?v=piano37"></script>
 </body>
 </html>

@@ -184,7 +184,8 @@
         }
         .zona-pulso-ritmo {
             margin: 0 0 16px;
-            padding: 18px 14px;
+            padding: 28px 14px;
+            min-height: 88px;
             border-radius: 14px;
             border: 2px dashed #7c4dff;
             background: rgba(124, 77, 255, 0.12);
@@ -192,14 +193,34 @@
             font-size: 15px;
             line-height: 1.4;
             text-align: center;
-            user-select: none;
-            touch-action: none;
             cursor: pointer;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: none;
+        }
+        .zona-pulso-ritmo,
+        .zona-pulso-ritmo * {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
+        #aviso-ritmo {
+            pointer-events: none;
+            display: block;
         }
         .zona-pulso-ritmo[hidden] { display: none; }
         .zona-pulso-ritmo.pulsando {
             background: rgba(124, 77, 255, 0.28);
             border-style: solid;
+        }
+        body.jugando-ritmo #status-box,
+        body.jugando-ritmo #status-box * {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
         }
         .nota-caja.ritmo-bien { border-color: #00e676; color: #00e676; background: rgba(0,230,118,0.2); }
         .nota-caja.ritmo-regular { border-color: #ffd740; color: #ffd740; background: rgba(255,215,64,0.15); }
@@ -395,6 +416,11 @@ body.vista-ritmo #prueba-micro > .fila-pruebas { display: none; }
     font-size: 15px;
     line-height: 1.45;
 }
+.ayuda ul {
+    margin: 8px 0 0;
+    padding-left: 1.2em;
+}
+.ayuda ul li { margin-bottom: 4px; }
 .btn-ayuda-cerrar {
     display: block;
     margin: 0 auto;
