@@ -76,11 +76,12 @@ let notasJuzgadasRitmo = 0;
 const RITMO_VENTANA_BIEN = 0.12;         // s: ataque muy bueno
 const RITMO_VENTANA_OK = 0.25;           // s: ataque aceptable
 const RITMO_VENTANA_PRIMERA = 0.45;      // 1ª nota en el downbeat: más margen
+const RITMO_ANTICIPO_LETRA = 0.08;       // con anacrusa, mostrar letra/notas justo al llegar
 const RITMO_DURACION_BIEN = 0.25;        // error relativo de duración
 const RITMO_DURACION_OK = 0.45;
 let metronomoRitmoActivo = true;         // clic de compás audible por defecto
 let ultimoBeatMetronomoRitmo = -999;     // índice de pulso musical (puede ser negativo)
-let velocidadRitmo = 1;                  // 1 = tempo de la partitura
+let velocidadRitmo = 0.6;                // inicio al 60 % del tempo de la pieza
 // ---- Juego del pájaro: la voz mueve el pájaro; las cerezas son las notas ----
 let modoPajaro = false;
 let estadoPajaro = "fin";                // 'calibracion' | 'prep' | 'jugando' | 'pausada' | 'fin'
@@ -94,29 +95,15 @@ let relojPajaro = { t0: 0, tiempoBase: 0 };
 let velocidadPajaro = 0.6;               // inicio al 60 % del tempo de la pieza
 let escenaMidiMin = 42;
 let escenaMidiMax = 60;
-const PIEZA_PAJARO_PRUEBA = "Frere Jacques";
-const PIEZAS_PAJARO_CON_CALIBRACION = [PIEZA_PAJARO_PRUEBA, "Cumpleanos Feliz"];
+const PIEZA_PRUEBA_FRERE = "Frere Jacques";
+const PIEZAS_CON_CALIBRACION = [PIEZA_PRUEBA_FRERE, "Cumpleanos Feliz"];
 const EMOJI_PAJARO = '<span class="emoji-pajaro">🐦</span>';
 function tituloPajaroHtml(conCereza) {
     return conCereza ? `Pájaro ${EMOJI_PAJARO}🍒` : `Pájaro ${EMOJI_PAJARO}`;
 }
-const PAJARO_BPM = 80;
-const PAJARO_NEGRA = 60 / PAJARO_BPM;    // 0,75 s
-// Frère Jacques (prueba): { s: semitonos relativos al Do cantado, d: duración en negras, silaba }.
-const PAJARO_MELODIA_PRUEBA = [
-    { s: 0, d: 1, silaba: "Frè" }, { s: 2, d: 1, silaba: "re" }, { s: 4, d: 1, silaba: "Jac" }, { s: 0, d: 1, silaba: "ques" },
-    { s: 0, d: 1, silaba: "Frè" }, { s: 2, d: 1, silaba: "re" }, { s: 4, d: 1, silaba: "Jac" }, { s: 0, d: 1, silaba: "ques" },
-    { s: 4, d: 1, silaba: "Dor" }, { s: 5, d: 1, silaba: "mez" }, { s: 7, d: 2, silaba: "vous" },
-    { s: 4, d: 1, silaba: "Dor" }, { s: 5, d: 1, silaba: "mez" }, { s: 7, d: 2, silaba: "vous" },
-    { s: 7, d: 0.5, silaba: "Son" }, { s: 9, d: 0.5, silaba: "nez" }, { s: 7, d: 0.5, silaba: "les" }, { s: 5, d: 0.5, silaba: "ma" }, { s: 4, d: 1, silaba: "ti" }, { s: 0, d: 1, silaba: "nes" },
-    { s: 7, d: 0.5, silaba: "Son" }, { s: 9, d: 0.5, silaba: "nez" }, { s: 7, d: 0.5, silaba: "les" }, { s: 5, d: 0.5, silaba: "ma" }, { s: 4, d: 1, silaba: "ti" }, { s: 0, d: 1, silaba: "nes" },
-    // Ding dang dong: Do, Sol bajo el Do, Do (×2)
-    { s: 0, d: 1, silaba: "Ding" }, { s: -5, d: 1, silaba: "dang" }, { s: 0, d: 2, silaba: "dong" },
-    { s: 0, d: 1, silaba: "Ding" }, { s: -5, d: 1, silaba: "dang" }, { s: 0, d: 2, silaba: "dong" }
-];
 
-function esPiezaPajaroPrueba(pieza) {
-    return PIEZAS_PAJARO_CON_CALIBRACION.includes((pieza || "").trim());
+function esPiezaConCalibracion(pieza) {
+    return PIEZAS_CON_CALIBRACION.includes((pieza || "").trim());
 }
 const PAJARO_MARGEN_CENTS = 70;          // ventana para recoger cereza
 const PAJARO_ANTICIPO = 2.2;             // s: la cereza aparece a la derecha antes de llegar
@@ -173,7 +160,7 @@ let bucleAudioActivo = false;            // evita arrancar varios bucles de audi
 
 // ---- Ajustes específicos por canción ----
 // Canciones en las que el usuario canta primero la nota inicial y la melodía se transpone a ella
-const CANCIONES_AFINACION_LIBRE = ["Cumpleanos Feliz"];
+const CANCIONES_AFINACION_LIBRE = PIEZAS_CON_CALIBRACION.slice();
 const DIFICULTAD_INICIAL = 60;   // Iniciación / Muy Fácil, para cualquier canción
 
 let modoCalibracion = false;             // true mientras se espera la primera nota
@@ -515,6 +502,8 @@ async function iniciarApp(modo = 'entrenamiento') {
             pistaMelodia = datosNotas.tracks.find(t => t.notes && t.notes.length > 0) || null;
             if (pistaMelodia) notasRaw = pistaMelodia.notes;
         }
+        // En ritmo el metrónomo va a tempo fijo: se ignoran ritardandos del MIDI.
+        if (modo === "ritmo") notasRaw = notasSinRitardando(notasRaw, datosNotas);
         acompanamiento = acordesDe(datosNotas, pistaMelodia);
         configCoro = piezaConCoro(datosTexto.coro) ? datosTexto.coro : null;
         datosCoroEntradas = null;
@@ -1707,12 +1696,10 @@ function rellenarSelectorPajaro() {
     const origen = document.getElementById("selector-cancion");
     const destino = document.getElementById("selector-pajaro");
     if (!origen || !destino) return;
-    const valor = destino.value || PIEZA_PAJARO_PRUEBA;
-    destino.innerHTML =
-        `<option value="${PIEZA_PAJARO_PRUEBA}">Frère Jacques (prueba)</option>` +
-        origen.innerHTML;
+    const valor = destino.value || origen.value || PIEZA_PRUEBA_FRERE;
+    destino.innerHTML = origen.innerHTML;
     if ([...destino.options].some(o => o.value === valor)) destino.value = valor;
-    else destino.value = PIEZA_PAJARO_PRUEBA;
+    else destino.value = PIEZA_PRUEBA_FRERE;
 }
 
 function mostrarPantallaPajaro() {
@@ -1775,15 +1762,81 @@ function notaEnPrimerTiempoDelCompas(tiempo) {
     return pos <= 0.06;
 }
 
+function pulsoEnCompasDeTiempo(tiempo) {
+    const firma = firmaEnTiempo(Math.max(0, tiempo || 0));
+    const esp = Math.max(0.01, firma.segundosPorPulso || 0.6);
+    const durCompas = Math.max(0.01, (firma.pulsos || 4) * esp);
+    const origen = firma.time || 0;
+    const pos = (((tiempo || 0) - origen) % durCompas + durCompas) % durCompas;
+    return Math.min(firma.pulsos || 4, Math.floor(pos / esp + 1e-6) + 1);
+}
+
+function esperandoAnacrusaRitmo() {
+    const primera = notasRitmo[0];
+    return !!(
+        modoRitmo &&
+        estadoRitmo === "reproduciendo" &&
+        fraseActualIndex < 0 &&
+        primera &&
+        !notaEnPrimerTiempoDelCompas(primera.tiempo)
+    );
+}
+
+function mostrarEsperaAnacrusaRitmo() {
+    fraseActualIndex = -1;
+    const secuencia = document.getElementById("secuencia-visual");
+    if (secuencia) secuencia.innerHTML = "";
+    const primera = notasRitmo[0];
+    const pulso = primera ? pulsoEnCompasDeTiempo(primera.tiempo) : 1;
+    const pantalla = document.getElementById("palabra-pantalla");
+    if (pantalla) {
+        pantalla.className = "palabra-actual cuenta";
+        pantalla.innerText = String(pulso);
+    }
+    const evaluacion = document.getElementById("evaluacion");
+    if (evaluacion) evaluacion.innerText = `Espera al tiempo ${pulso}`;
+}
+
+function limpiarLetraRitmo() {
+    fraseActualIndex = -1;
+    const secuencia = document.getElementById("secuencia-visual");
+    if (secuencia) secuencia.innerHTML = "";
+    const pantalla = document.getElementById("palabra-pantalla");
+    if (pantalla) {
+        pantalla.className = "palabra-actual";
+        pantalla.innerText = "";
+    }
+}
+
+// Con anacrusa, la 1ª letra/nota no se adelanta: aparece al llegar su tiempo.
+function letraRitmoListaParaMostrar(nota, ahora) {
+    if (!nota) return false;
+    const primera = notasRitmo[0];
+    if (
+        indiceNotaRitmo === 0 &&
+        primera &&
+        nota === primera &&
+        !nota.momento &&
+        !notaEnPrimerTiempoDelCompas(primera.tiempo)
+    ) {
+        return ahora >= primera.tiempo - RITMO_ANTICIPO_LETRA;
+    }
+    return true;
+}
+
 function arrancarReproduccionRitmo(zona, anticipoMusical) {
     estadoRitmo = "reproduciendo";
-    mostrarPalabraRitmo(0);
+    const primera = notasRitmo[0];
+    const conAnacrusa = !!(primera && !notaEnPrimerTiempoDelCompas(primera.tiempo));
+    if (!conAnacrusa) mostrarPalabraRitmo(0);
     activarListenersRitmo();
     if (zona) zona.focus();
     ultimoBeatMetronomoRitmo = -999;
     relojRitmo = { t0: performance.now(), tiempoBase: -(anticipoMusical || 0) };
     animacionRitmoId = requestAnimationFrame(bucleJuegoRitmo);
     actualizarMarcadorRitmo();
+    // Anacrusa (p. ej. Gia en el 4.º tiempo): número + «Espera al tiempo».
+    if (conAnacrusa) mostrarEsperaAnacrusaRitmo();
     actualizarControlesRitmo();
 }
 
@@ -1824,6 +1877,23 @@ function volverAPantallaRitmo() {
     document.getElementById("botones-inicio").style.display = "none";
     mostrarPantallaRitmo();
     actualizarBotonAyuda();
+}
+
+// Recalcula time/duration con el BPM inicial (sin mapa de tempos / ritardando).
+function notasSinRitardando(notasRaw, datosNotas) {
+    const lista = Array.isArray(notasRaw) ? notasRaw : [];
+    const header = (datosNotas && datosNotas.header) || {};
+    const tempos = header.tempos || [];
+    if (tempos.length <= 1) return lista.slice();
+    const bpm = (tempos[0] && tempos[0].bpm) || 100;
+    const ppq = header.ppq || 480;
+    const segPorTick = (60 / bpm) / ppq;
+    return lista.map(n => {
+        const copia = Object.assign({}, n);
+        if (typeof n.ticks === "number") copia.time = n.ticks * segPorTick;
+        if (typeof n.durationTicks === "number") copia.duration = n.durationTicks * segPorTick;
+        return copia;
+    });
 }
 
 function construirNotasRitmo() {
@@ -2097,6 +2167,11 @@ function claseDuracionRitmo(hold, esperada) {
 }
 
 function actualizarMarcadorRitmo() {
+    if (esperandoAnacrusaRitmo()) {
+        const pulso = pulsoEnCompasDeTiempo(notasRitmo[0].tiempo);
+        document.getElementById("evaluacion").innerText = `Espera al tiempo ${pulso}`;
+        return;
+    }
     const total = notasRitmo.length;
     const van = Math.min(indiceNotaRitmo + 1, total);
     document.getElementById("evaluacion").innerText =
@@ -2212,12 +2287,16 @@ function bucleJuegoRitmo() {
                 return;
             }
             const siguiente = notasRitmo[indiceNotaRitmo];
-            if (siguiente.palabraIndex !== fraseActualIndex) mostrarPalabraRitmo(siguiente.palabraIndex);
-            else resaltarNotaRitmo();
+            if (letraRitmoListaParaMostrar(siguiente, ahora)) {
+                if (siguiente.palabraIndex !== fraseActualIndex) mostrarPalabraRitmo(siguiente.palabraIndex);
+                else resaltarNotaRitmo();
+            }
             actualizarMarcadorRitmo();
         } else {
-            if (nota.palabraIndex !== fraseActualIndex) mostrarPalabraRitmo(nota.palabraIndex);
-            else resaltarNotaRitmo();
+            if (letraRitmoListaParaMostrar(nota, ahora)) {
+                if (nota.palabraIndex !== fraseActualIndex) mostrarPalabraRitmo(nota.palabraIndex);
+                else resaltarNotaRitmo();
+            }
             break;
         }
     }
@@ -2229,9 +2308,7 @@ function iniciarJuegoRitmo() {
     soltarMicrofono();
     notasRitmo = construirNotasRitmo();
     if (!notasRitmo.length) return;
-    const controlVel = document.getElementById("velocidad-ritmo");
-    if (controlVel) cambiarVelocidadRitmo(controlVel.value);
-    else velocidadRitmo = 1;
+    cambiarVelocidadRitmo(0.6);
     modoRitmo = true;
     estadoRitmo = "cuenta";
     indiceNotaRitmo = 0;
@@ -2248,7 +2325,7 @@ function iniciarJuegoRitmo() {
     zona.classList.remove("pulsando");
     document.getElementById("aviso-ritmo").textContent =
         "Pulsa la pantalla o la barra espaciadora al ritmo. Mantén para la duración.";
-    mostrarPalabraRitmo(0);
+    limpiarLetraRitmo();
     actualizarMarcadorRitmo();
     restaurarCompasInicial();
     alCambiarMetronomoRitmo();
@@ -2282,7 +2359,6 @@ function iniciarJuegoRitmo() {
         quedan--;
         setTimeout(pulsar, segundosPorPulso * 1000 / velocidadRitmo);
     };
-    document.getElementById("palabra-pantalla").innerText = "Ritmo";
     setTimeout(pulsar, 200);
 }
 
@@ -2459,23 +2535,6 @@ function volverAPantallaPajaro() {
 }
 
 async function cargarMelodiaPajaro(pieza) {
-    if (pieza === PIEZA_PAJARO_PRUEBA) {
-        let t = 0;
-        melodiaPajaroBase = PAJARO_MELODIA_PRUEBA.map(n => {
-            const item = {
-                midi: 60 + n.s,
-                tiempo: t,
-                duracion: n.d * PAJARO_NEGRA,
-                silaba: n.silaba || ""
-            };
-            t += n.d * PAJARO_NEGRA;
-            return item;
-        });
-        tituloCancionActual = "Frère Jacques (prueba)";
-        cancionActual = PIEZA_PAJARO_PRUEBA;
-        return;
-    }
-
     const [resNotas, resTexto] = await Promise.all([
         cargarArchivoCancion(`${pieza}.json`),
         cargarArchivoCancion(`${pieza} txt.json`)
@@ -2546,7 +2605,7 @@ function prepararPantallaJuegoPajaro() {
 
 async function empezarPajaroConPieza() {
     const sel = document.getElementById("selector-pajaro");
-    const pieza = ((sel && sel.value) || PIEZA_PAJARO_PRUEBA).trim();
+    const pieza = ((sel && sel.value) || PIEZA_PRUEBA_FRERE).trim();
     if (!pieza) return;
     try {
         detenerPruebaMicrofono();
@@ -2564,7 +2623,7 @@ async function empezarPajaroConPieza() {
         aciertosPajaro = 0;
         midiSuavePajaro = null;
         actualizarBotonAyuda();
-        if (esPiezaPajaroPrueba(pieza)) iniciarCalibracionPajaro();
+        if (esPiezaConCalibracion(pieza)) iniciarCalibracionPajaro();
         else prepararEntradaPajaro();
         actualizarControlesPajaro();
 
@@ -2600,7 +2659,7 @@ function reiniciarJuegoPajaro() {
     document.getElementById("secuencia-visual").innerHTML = "";
     const escenario = document.getElementById("escenario-pajaro");
     if (escenario) escenario.hidden = true;
-    if (esPiezaPajaroPrueba(cancionActual)) iniciarCalibracionPajaro();
+    if (esPiezaConCalibracion(cancionActual)) iniciarCalibracionPajaro();
     else prepararEntradaPajaro();
     actualizarControlesPajaro();
 }

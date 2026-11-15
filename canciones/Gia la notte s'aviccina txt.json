@@ -72,10 +72,11 @@
       ]
     },
     {
-      "linea_completa": "chi non po-sain que-stea-re-ne",
-      "texto_visible": "(qui) non posa_in (cues)te_arene",
+      "linea_completa": "chi-i non po-sain que-stea-re-ne",
+      "texto_visible": "(qui)_i non posa_in (cues)te_arene",
       "silabas": [
         "chi",
+        "i",
         "non",
         "po",
         "sain",
@@ -86,12 +87,11 @@
       ]
     },
     {
-      "linea_completa": "or che-un len-to Ze-fi-ret-to",
-      "texto_visible": "or (que)_un lento Zefiretto",
+      "linea_completa": "or cheun len-to Ze-fi-ret-to",
+      "texto_visible": "or cheun lento Zefiretto",
       "silabas": [
         "or",
-        "che",
-        "un",
+        "cheun",
         "len",
         "to",
         "Ze",
