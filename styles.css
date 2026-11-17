@@ -138,7 +138,8 @@
             text-align: left;
         }
         #selector-ritmo,
-        #selector-pajaro {
+        #selector-pajaro,
+        #selector-simon {
             width: 100%;
             background: #2a2a30;
             color: #fff;
@@ -197,6 +198,81 @@
         .btn-volver-juegos:hover {
             background: rgba(124, 77, 255, 0.15);
             border-color: #7c4dff;
+        }
+        .disco-simon {
+            width: min(72vw, 320px);
+            height: min(72vw, 320px);
+            margin: 18px auto 20px;
+            filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.35));
+        }
+        .disco-simon svg {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .disco-simon .gajo-simon {
+            stroke: rgba(255, 255, 255, 0.45);
+            stroke-width: 1;
+            transition: filter 0.08s ease-out, opacity 0.08s ease-out;
+            opacity: 0.72;
+            cursor: pointer;
+        }
+        .disco-simon .gajo-simon.gajo-natural {
+            stroke: rgba(255, 255, 255, 0.95);
+            stroke-width: 3.25;
+        }
+        .disco-simon .gajo-simon.gajo-alteracion {
+            stroke: rgba(255, 255, 255, 0.28);
+            stroke-width: 0.75;
+        }
+        .disco-simon:not(.simon-esperando) .gajo-simon {
+            cursor: default;
+        }
+        .disco-simon .gajo-simon.activo {
+            opacity: 1;
+            filter: brightness(1.55) saturate(1.15);
+            stroke: #fff;
+            stroke-width: 2.5;
+        }
+        .disco-simon .gajo-simon.gajo-natural.activo {
+            stroke-width: 4;
+        }
+        .disco-simon .gajo-simon.fallo {
+            opacity: 1;
+            filter: brightness(0.55) saturate(0.4);
+            stroke: #fff;
+            stroke-width: 2.5;
+        }
+        #estado-simon.simon-ok { color: #00e676; }
+        #estado-simon.simon-mal { color: #ff5252; }
+        .disco-simon .nota-simon {
+            fill: #fff;
+            font-family: "Segoe UI", system-ui, sans-serif;
+            font-size: 13px;
+            font-weight: 700;
+            paint-order: stroke fill;
+            stroke: rgba(0, 0, 0, 0.35);
+            stroke-width: 2.5px;
+            stroke-linejoin: round;
+        }
+        .disco-simon .centro-simon-anillo {
+            fill: #fff;
+        }
+        .disco-simon .centro-simon {
+            fill: #1a73e8;
+            cursor: pointer;
+            transition: filter 0.12s ease-out;
+        }
+        .disco-simon .centro-simon:hover {
+            filter: brightness(1.12);
+        }
+        .disco-simon .texto-ayuda-simon {
+            fill: #fff;
+            font-family: "Segoe UI", system-ui, sans-serif;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            user-select: none;
         }
         .zona-pulso-ritmo {
             margin: 0 0 16px;
@@ -567,7 +643,8 @@ body.vista-calentamiento #zona-seleccion > .barra-superior,
 body.vista-juegos #zona-seleccion > .barra-superior,
 body.vista-ritmo #zona-seleccion > .barra-superior,
 body.vista-pajaro #zona-seleccion > .barra-superior,
-body.vista-colibri #zona-seleccion > .barra-superior { display: flex; }
+body.vista-colibri #zona-seleccion > .barra-superior,
+body.vista-simon #zona-seleccion > .barra-superior { display: flex; }
 body.vista-calentamiento #btn-probar-micro,
 body.vista-calentamiento #btn-juegos,
 body.vista-calentamiento #elige-pieza,
@@ -598,7 +675,14 @@ body.vista-colibri #btn-juegos,
 body.vista-colibri #elige-pieza,
 body.vista-colibri #botones-inicio,
 body.vista-colibri .control-dificultad,
-body.vista-colibri #opcion-coro { display: none !important; }
+body.vista-colibri #opcion-coro,
+body.vista-simon #btn-probar-micro,
+body.vista-simon #btn-calentamiento,
+body.vista-simon #btn-juegos,
+body.vista-simon #elige-pieza,
+body.vista-simon #botones-inicio,
+body.vista-simon .control-dificultad,
+body.vista-simon #opcion-coro { display: none !important; }
 body.vista-calentamiento #btn-calentamiento,
 body.vista-juegos #btn-juegos {
     background: transparent;
@@ -613,7 +697,8 @@ body.vista-calentamiento #btn-calentamiento:hover,
 body.vista-juegos #btn-juegos:hover { transform: none; }
 body.vista-ritmo #prueba-micro > .fila-pruebas,
 body.vista-pajaro #prueba-micro > .fila-pruebas,
-body.vista-colibri #prueba-micro > .fila-pruebas { display: none; }
+body.vista-colibri #prueba-micro > .fila-pruebas,
+body.vista-simon #prueba-micro > .fila-pruebas { display: none; }
 
 
 /* ===== Título de la canción junto al nombre del coro ===== */

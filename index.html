@@ -117,6 +117,7 @@
                 </div>
                 <div class="fila-juego">
                     <button type="button" onclick="empezarJuego(4)">4</button>
+                    <span class="etiqueta-juego">Simon 🗣️</span>
                 </div>
             </div>
             <div id="pantalla-ritmo" class="pantalla-ritmo" hidden>
@@ -151,6 +152,19 @@
                 <p class="ayuda-ritmo">Cantas una nota cómoda y la oyes. Primero 9 flores con guía, luego la secuencia con guía, y al final la misma secuencia sin notas guía.</p>
                 <div class="acciones-ritmo">
                     <button type="button" class="btn-empezar-ritmo" onclick="empezarColibri()">Empezar colibrí ▶</button>
+                    <button type="button" class="btn-volver-juegos" onclick="volverAListaJuegos()">← Juegos</button>
+                </div>
+            </div>
+            <div id="pantalla-simon" class="pantalla-ritmo" hidden>
+                <h3 class="titulo-apartado-juego">Juegos</h3>
+                <h4 class="titulo-juego-activo">Simon 🗣️</h4>
+                <label for="selector-simon" class="etiqueta-elige-ritmo">Elige una pieza:</label>
+                <select id="selector-simon"></select>
+                <p class="ayuda-ritmo">Escucha cada compás, pulsa los gajos en el mismo orden. Sin fallos, al final va toda la canción seguida. El centro «ayuda» te da la nota que toca. Aquí no hace falta cantar una nota de partida.</p>
+                <p id="estado-simon" class="ayuda-ritmo">Elige una pieza y pulsa Empezar.</p>
+                <div id="disco-simon" class="disco-simon" aria-hidden="false"></div>
+                <div class="acciones-ritmo">
+                    <button type="button" class="btn-empezar-ritmo" onclick="empezarSimonConPieza()">Empezar Simon ▶</button>
                     <button type="button" class="btn-volver-juegos" onclick="volverAListaJuegos()">← Juegos</button>
                 </div>
             </div>
@@ -324,6 +338,6 @@
 
     <!--cargamos el motor -->
     
-    <script src="./app.js?v=colibri11"></script>
+    <script src="./app.js?v=simon9"></script>
 </body>
 </html>

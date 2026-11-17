@@ -1696,7 +1696,8 @@ function mostrarJuegos() {
     cerrarPantallaRitmo();
     cerrarPantallaPajaro();
     cerrarPantallaColibri();
-    document.body.classList.remove("vista-ritmo", "vista-pajaro", "vista-colibri");
+    cerrarPantallaSimon();
+    document.body.classList.remove("vista-ritmo", "vista-pajaro", "vista-colibri", "vista-simon");
     document.body.classList.add("vista-juegos");
     document.getElementById("lista-juegos").hidden = false;
     document.getElementById("botones-inicio").style.display = "none";
@@ -1708,11 +1709,13 @@ function cerrarJuegos(restaurarBotones = true) {
     document.body.classList.remove("vista-ritmo");
     document.body.classList.remove("vista-pajaro");
     document.body.classList.remove("vista-colibri");
+    document.body.classList.remove("vista-simon");
     const lista = document.getElementById("lista-juegos");
     if (lista) lista.hidden = true;
     cerrarPantallaRitmo();
     cerrarPantallaPajaro();
     cerrarPantallaColibri();
+    cerrarPantallaSimon();
     if (restaurarBotones) document.getElementById("botones-inicio").style.display = "flex";
     actualizarBotonAyuda();
 }
@@ -1747,13 +1750,20 @@ function cerrarPantallaColibri() {
     if (pantalla) pantalla.hidden = true;
 }
 
+function cerrarPantallaSimon() {
+    detenerSimon();
+    const pantalla = document.getElementById("pantalla-simon");
+    if (pantalla) pantalla.hidden = true;
+}
+
 function mostrarPantallaRitmo() {
     ocultarResultadoMicrofono();
     rellenarSelectorRitmo();
     cerrarPantallaPajaro();
     cerrarPantallaColibri();
+    cerrarPantallaSimon();
     document.getElementById("lista-juegos").hidden = true;
-    document.body.classList.remove("vista-juegos", "vista-pajaro", "vista-colibri");
+    document.body.classList.remove("vista-juegos", "vista-pajaro", "vista-colibri", "vista-simon");
     document.body.classList.add("vista-ritmo");
     document.getElementById("pantalla-ritmo").hidden = false;
     document.getElementById("botones-inicio").style.display = "none";
@@ -1774,9 +1784,10 @@ function mostrarPantallaPajaro() {
     ocultarResultadoMicrofono();
     cerrarPantallaRitmo();
     cerrarPantallaColibri();
+    cerrarPantallaSimon();
     rellenarSelectorPajaro();
     document.getElementById("lista-juegos").hidden = true;
-    document.body.classList.remove("vista-juegos", "vista-ritmo", "vista-colibri");
+    document.body.classList.remove("vista-juegos", "vista-ritmo", "vista-colibri", "vista-simon");
     document.body.classList.add("vista-pajaro");
     document.getElementById("pantalla-pajaro").hidden = false;
     document.getElementById("botones-inicio").style.display = "none";
@@ -1787,11 +1798,39 @@ function mostrarPantallaColibri() {
     ocultarResultadoMicrofono();
     cerrarPantallaRitmo();
     cerrarPantallaPajaro();
+    cerrarPantallaSimon();
     document.getElementById("lista-juegos").hidden = true;
-    document.body.classList.remove("vista-juegos", "vista-ritmo", "vista-pajaro");
+    document.body.classList.remove("vista-juegos", "vista-ritmo", "vista-pajaro", "vista-simon");
     document.body.classList.add("vista-colibri");
     document.getElementById("pantalla-colibri").hidden = false;
     document.getElementById("botones-inicio").style.display = "none";
+    actualizarBotonAyuda();
+}
+
+function rellenarSelectorSimon() {
+    const origen = document.getElementById("selector-cancion");
+    const destino = document.getElementById("selector-simon");
+    if (!origen || !destino) return;
+    const valor = destino.value || origen.value || PIEZA_PRUEBA_FRERE;
+    destino.innerHTML = origen.innerHTML;
+    if ([...destino.options].some(o => o.value === valor)) destino.value = valor;
+    else destino.value = PIEZA_PRUEBA_FRERE;
+}
+
+function mostrarPantallaSimon() {
+    ocultarResultadoMicrofono();
+    cerrarPantallaRitmo();
+    cerrarPantallaPajaro();
+    cerrarPantallaColibri();
+    rellenarSelectorSimon();
+    document.getElementById("lista-juegos").hidden = true;
+    document.body.classList.remove("vista-juegos", "vista-ritmo", "vista-pajaro", "vista-colibri");
+    document.body.classList.add("vista-simon");
+    document.getElementById("pantalla-simon").hidden = false;
+    document.getElementById("botones-inicio").style.display = "none";
+    detenerSimon();
+    dibujarDiscoSimon();
+    mensajeSimon("Elige una pieza y pulsa Empezar.");
     actualizarBotonAyuda();
 }
 
@@ -1799,7 +1838,8 @@ function volverAListaJuegos() {
     cerrarPantallaRitmo();
     cerrarPantallaPajaro();
     cerrarPantallaColibri();
-    document.body.classList.remove("vista-ritmo", "vista-pajaro", "vista-colibri");
+    cerrarPantallaSimon();
+    document.body.classList.remove("vista-ritmo", "vista-pajaro", "vista-colibri", "vista-simon");
     document.body.classList.add("vista-juegos");
     document.getElementById("lista-juegos").hidden = false;
     actualizarBotonAyuda();
@@ -1819,6 +1859,484 @@ function empezarJuego(numero) {
         mostrarPantallaPajaro();
         return;
     }
+    if (numero === 4) {
+        mostrarPantallaSimon();
+        return;
+    }
+}
+
+// ==========================================
+// JUEGO 4: SIMON DICE — disco de 12 colores
+// ==========================================
+// Doce gajos exteriores (como el Chrome, pero con 12 en vez de 3) + centro azul.
+const COLORES_SIMON = [
+    "#ea4335", "#f4511e", "#fb8c00", "#fdd835",
+    "#c0ca33", "#7cb342", "#43a047", "#00acc1",
+    "#1e88e5", "#3949ab", "#8e24aa", "#d81b60"
+];
+
+// Do centrado a las 12h; alteraciones con sostenido y bemol.
+const NOTAS_SIMON = [
+    ["Do"],
+    ["Do#", "Re♭"],
+    ["Re"],
+    ["Re#", "Mi♭"],
+    ["Mi"],
+    ["Fa"],
+    ["Fa#", "Sol♭"],
+    ["Sol"],
+    ["Sol#", "La♭"],
+    ["La"],
+    ["La#", "Si♭"],
+    ["Si"]
+];
+
+function polarSimon(cx, cy, r, grados) {
+    const rad = (grados - 90) * Math.PI / 180;
+    return {
+        x: cx + r * Math.cos(rad),
+        y: cy + r * Math.sin(rad)
+    };
+}
+
+function pathGajoSimon(cx, cy, r, a0, a1) {
+    const p0 = polarSimon(cx, cy, r, a0);
+    const p1 = polarSimon(cx, cy, r, a1);
+    return `M ${cx} ${cy} L ${p0.x.toFixed(2)} ${p0.y.toFixed(2)} ` +
+        `A ${r} ${r} 0 0 1 ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} Z`;
+}
+
+function dibujarDiscoSimon() {
+    const caja = document.getElementById("disco-simon");
+    if (!caja) return;
+    const size = 320;
+    const cx = size / 2;
+    const cy = size / 2;
+    const rOuter = 148;
+    const rAnillo = 58;
+    const rCentro = 46;
+    const rTexto = (rAnillo + rOuter) * 0.55;
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.setAttribute("viewBox", `0 0 ${size} ${size}`);
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "Disco Simon de doce notas");
+
+    COLORES_SIMON.forEach((color, i) => {
+        // Centrar Do (i=0) en las 12h: gajo de −15° a +15°.
+        const a0 = i * 30 - 15;
+        const a1 = a0 + 30;
+        const path = document.createElementNS(svgNS, "path");
+        path.setAttribute("d", pathGajoSimon(cx, cy, rOuter, a0, a1));
+        path.setAttribute("fill", color);
+        // Naturales (Do Re Mi Fa Sol La Si): borde más grueso; alteraciones, más fino.
+        const esNatural = [0, 2, 4, 5, 7, 9, 11].includes(i);
+        path.setAttribute("class", esNatural ? "gajo-simon gajo-natural" : "gajo-simon gajo-alteracion");
+        path.dataset.indice = String(i);
+        path.setAttribute("role", "button");
+        path.setAttribute("tabindex", "0");
+        path.addEventListener("click", () => alPulsarGajoSimon(i));
+        path.addEventListener("keydown", (ev) => {
+            if (ev.key === "Enter" || ev.key === " ") {
+                ev.preventDefault();
+                alPulsarGajoSimon(i);
+            }
+        });
+        svg.appendChild(path);
+    });
+
+    const anillo = document.createElementNS(svgNS, "circle");
+    anillo.setAttribute("cx", String(cx));
+    anillo.setAttribute("cy", String(cy));
+    anillo.setAttribute("r", String(rAnillo));
+    anillo.setAttribute("class", "centro-simon-anillo");
+    anillo.setAttribute("pointer-events", "none");
+    svg.appendChild(anillo);
+
+    const centro = document.createElementNS(svgNS, "circle");
+    centro.setAttribute("cx", String(cx));
+    centro.setAttribute("cy", String(cy));
+    centro.setAttribute("r", String(rCentro));
+    centro.setAttribute("class", "centro-simon");
+    centro.setAttribute("role", "button");
+    centro.setAttribute("tabindex", "0");
+    centro.setAttribute("aria-label", "Ayuda: oír la nota correcta");
+    centro.addEventListener("click", alPulsarAyudaSimon);
+    centro.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+            ev.preventDefault();
+            alPulsarAyudaSimon();
+        }
+    });
+    svg.appendChild(centro);
+
+    const textoAyuda = document.createElementNS(svgNS, "text");
+    textoAyuda.setAttribute("x", String(cx));
+    textoAyuda.setAttribute("y", String(cy));
+    textoAyuda.setAttribute("class", "texto-ayuda-simon");
+    textoAyuda.setAttribute("text-anchor", "middle");
+    textoAyuda.setAttribute("dominant-baseline", "middle");
+    textoAyuda.setAttribute("pointer-events", "none");
+    textoAyuda.textContent = "ayuda";
+    svg.appendChild(textoAyuda);
+
+    NOTAS_SIMON.forEach((lineas, i) => {
+        const ang = i * 30;
+        const p = polarSimon(cx, cy, rTexto, ang);
+        const texto = document.createElementNS(svgNS, "text");
+        texto.setAttribute("x", p.x.toFixed(2));
+        texto.setAttribute("y", p.y.toFixed(2));
+        texto.setAttribute("class", "nota-simon");
+        texto.setAttribute("text-anchor", "middle");
+        texto.setAttribute("dominant-baseline", "middle");
+        texto.setAttribute("pointer-events", "none");
+        if (lineas.length === 1) {
+            texto.textContent = lineas[0];
+        } else {
+            lineas.forEach((linea, li) => {
+                const tspan = document.createElementNS(svgNS, "tspan");
+                tspan.setAttribute("x", p.x.toFixed(2));
+                tspan.setAttribute("dy", li === 0 ? "-0.55em" : "1.1em");
+                tspan.textContent = linea;
+                texto.appendChild(tspan);
+            });
+        }
+        svg.appendChild(texto);
+    });
+
+    caja.innerHTML = "";
+    caja.appendChild(svg);
+}
+
+let idSimon = 0;
+let temporizadoresSimon = [];
+let secuenciaSimon = [];
+let pasoSimon = 0;
+let faseSimon = "idle"; // 'demo' | 'respuesta' | 'fin'
+let compasesSimon = [];
+let indiceCompasSimon = 0;
+let huboFalloSimon = false;
+let modoCompletoSimon = false;
+let trasFalloSimon = false;
+
+function mensajeSimon(texto, clase) {
+    const el = document.getElementById("estado-simon");
+    if (!el) return;
+    el.textContent = texto;
+    el.classList.remove("simon-ok", "simon-mal");
+    if (clase) el.classList.add(clase);
+}
+
+function marcarDiscoSimonEsperando(activo) {
+    const caja = document.getElementById("disco-simon");
+    if (caja) caja.classList.toggle("simon-esperando", !!activo);
+}
+
+function apagarGajosSimon() {
+    document.querySelectorAll(".gajo-simon.activo, .gajo-simon.fallo").forEach(el => {
+        el.classList.remove("activo", "fallo");
+    });
+}
+
+function iluminarGajoSimon(indice, clase = "activo") {
+    apagarGajosSimon();
+    const gajo = document.querySelector(`.gajo-simon[data-indice="${indice}"]`);
+    if (gajo) gajo.classList.add(clase);
+}
+
+function detenerSimon() {
+    idSimon++;
+    temporizadoresSimon.forEach(clearTimeout);
+    temporizadoresSimon = [];
+    secuenciaSimon = [];
+    pasoSimon = 0;
+    faseSimon = "idle";
+    compasesSimon = [];
+    indiceCompasSimon = 0;
+    huboFalloSimon = false;
+    modoCompletoSimon = false;
+    trasFalloSimon = false;
+    marcarDiscoSimonEsperando(false);
+    apagarGajosSimon();
+    silenciarMelodia();
+}
+
+function puedeAyudaSimon() {
+    if (!secuenciaSimon.length || pasoSimon >= secuenciaSimon.length) return false;
+    return faseSimon === "respuesta" || trasFalloSimon;
+}
+
+function alPulsarAyudaSimon() {
+    if (!puedeAyudaSimon()) return;
+    const nota = secuenciaSimon[pasoSimon];
+    if (!nota) return;
+
+    asegurarAudioContext();
+    if (audioContext.state === "suspended") audioContext.resume();
+
+    const indice = ((nota.midi % 12) + 12) % 12;
+    iluminarGajoSimon(indice);
+    sonarNota(nombreInglesDesdeMidi(nota.midi), Math.min(nota.duracion || 0.75, 0.75), VOLUMEN_MELODIA_GUIA);
+
+    const id = idSimon;
+    const finLuz = Math.min(nota.duracion || 0.55, 0.55) * 1000;
+    programarSimon(finLuz, () => {
+        if (id !== idSimon) return;
+        if (faseSimon === "respuesta" || trasFalloSimon) apagarGajosSimon();
+    }, id);
+}
+
+function programarSimon(esperaMs, accion, id) {
+    const t = setTimeout(() => {
+        if (id !== idSimon) return;
+        accion();
+    }, Math.max(0, esperaMs));
+    temporizadoresSimon.push(t);
+}
+
+function textoEscuchaSimon() {
+    if (modoCompletoSimon) return "Escucha toda la canción…";
+    const total = compasesSimon.length || 1;
+    return `Escucha el compás ${indiceCompasSimon + 1} de ${total}…`;
+}
+
+function abrirRespuestaSimon(id) {
+    if (id !== idSimon) return;
+    apagarGajosSimon();
+    trasFalloSimon = false;
+    pasoSimon = 0;
+    faseSimon = "respuesta";
+    marcarDiscoSimonEsperando(true);
+    mensajeSimon(modoCompletoSimon
+        ? "Pulsa toda la canción en el mismo orden"
+        : "Pulsa los gajos en el mismo orden");
+}
+
+function alCompletarSecuenciaSimon(id) {
+    if (id !== idSimon) return;
+    apagarGajosSimon();
+    marcarDiscoSimonEsperando(false);
+
+    if (modoCompletoSimon) {
+        faseSimon = "fin";
+        mensajeSimon(
+            huboFalloSimon
+                ? "¡Bien! Has reproducido toda la canción"
+                : "¡Perfecto! Toda la canción sin fallos",
+            "simon-ok"
+        );
+        return;
+    }
+
+    if (indiceCompasSimon < compasesSimon.length - 1) {
+        indiceCompasSimon++;
+        mensajeSimon(`¡Bien! Siguiente: compás ${indiceCompasSimon + 1} de ${compasesSimon.length}`, "simon-ok");
+        programarSimon(900, () => {
+            if (id !== idSimon) return;
+            reproducirDemoSimon(compasesSimon[indiceCompasSimon]);
+        }, id);
+        return;
+    }
+
+    if (!huboFalloSimon) {
+        modoCompletoSimon = true;
+        mensajeSimon("Sin fallos: ahora toda la canción seguida…", "simon-ok");
+        programarSimon(1100, () => {
+            if (id !== idSimon) return;
+            reproducirDemoSimon(compasesSimon.flat());
+        }, id);
+        return;
+    }
+
+    faseSimon = "fin";
+    mensajeSimon("¡Canción completa!", "simon-ok");
+}
+
+function alPulsarGajoSimon(indice) {
+    if (faseSimon !== "respuesta") return;
+    if (!secuenciaSimon.length || pasoSimon >= secuenciaSimon.length) return;
+
+    asegurarAudioContext();
+    if (audioContext.state === "suspended") audioContext.resume();
+
+    const esperada = secuenciaSimon[pasoSimon];
+    const indiceEsperado = ((esperada.midi % 12) + 12) % 12;
+    const durPulse = Math.min(esperada.duracion || 0.55, 0.55);
+
+    if (indice !== indiceEsperado) {
+        huboFalloSimon = true;
+        trasFalloSimon = true;
+        faseSimon = "demo";
+        marcarDiscoSimonEsperando(false);
+        iluminarGajoSimon(indice, "fallo");
+        sonarNota(nombreInglesDesdeMidi(60 + indice), 0.35, VOLUMEN_MELODIA_GUIA * 0.7);
+        mensajeSimon("Incorrecto. Pulsa ayuda o escucha otra vez…", "simon-mal");
+        const id = idSimon;
+        programarSimon(1600, () => {
+            if (id !== idSimon) return;
+            trasFalloSimon = false;
+            reproducirDemoSimon(secuenciaSimon);
+        }, id);
+        return;
+    }
+
+    iluminarGajoSimon(indice);
+    sonarNota(nombreInglesDesdeMidi(esperada.midi), esperada.duracion || 0.75, VOLUMEN_MELODIA_GUIA);
+    pasoSimon++;
+
+    if (pasoSimon >= secuenciaSimon.length) {
+        faseSimon = "demo";
+        marcarDiscoSimonEsperando(false);
+        const id = idSimon;
+        programarSimon(durPulse * 1000, () => alCompletarSecuenciaSimon(id), id);
+        return;
+    }
+
+    const id = idSimon;
+    programarSimon(durPulse * 1000, () => {
+        if (id !== idSimon || faseSimon !== "respuesta") return;
+        apagarGajosSimon();
+    }, id);
+}
+
+function reproducirDemoSimon(frase) {
+    const id = ++idSimon;
+    temporizadoresSimon.forEach(clearTimeout);
+    temporizadoresSimon = [];
+    apagarGajosSimon();
+    marcarDiscoSimonEsperando(false);
+    trasFalloSimon = false;
+    faseSimon = "demo";
+    pasoSimon = 0;
+    secuenciaSimon = frase.slice();
+    mensajeSimon(textoEscuchaSimon());
+
+    if (!secuenciaSimon.length) return;
+
+    const t0 = secuenciaSimon[0].tiempo;
+    const retrasoInicio = 280;
+
+    secuenciaSimon.forEach(nota => {
+        const cuando = retrasoInicio + (nota.tiempo - t0) * 1000;
+        programarSimon(cuando, () => {
+            iluminarGajoSimon(((nota.midi % 12) + 12) % 12);
+            sonarNota(nombreInglesDesdeMidi(nota.midi), nota.duracion, VOLUMEN_MELODIA_GUIA);
+        }, id);
+    });
+
+    const ultima = secuenciaSimon[secuenciaSimon.length - 1];
+    const finMs = retrasoInicio + (ultima.tiempo - t0 + ultima.duracion) * 1000 + 180;
+    programarSimon(finMs, () => abrirRespuestaSimon(id), id);
+}
+
+function firmasCompasDesdeDatos(datosNotas) {
+    const header = (datosNotas && datosNotas.header) || {};
+    const bpm = (header.tempos && header.tempos[0] && header.tempos[0].bpm) || 100;
+    const ppq = header.ppq || 480;
+    const lista = (header.timeSignatures && header.timeSignatures.length)
+        ? header.timeSignatures
+        : [{ ticks: 0, timeSignature: [4, 4] }];
+    return lista.map(entrada => {
+        const firma = entrada.timeSignature || [4, 4];
+        const numerador = firma[0] || 4;
+        const denominador = firma[1] || 4;
+        const ticks = typeof entrada.ticks === "number" ? entrada.ticks : 0;
+        const time = typeof entrada.time === "number" ? entrada.time : ticks / ppq * (60 / bpm);
+        return {
+            time,
+            pulsos: Math.min(12, Math.max(1, Math.round(numerador))),
+            segundosPorPulso: (60 / bpm) * (4 / denominador)
+        };
+    }).sort((a, b) => a.time - b.time);
+}
+
+function indiceCompasDeTiempoSimon(tiempo, firmas) {
+    const lista = firmas && firmas.length
+        ? firmas
+        : [{ time: 0, pulsos: 4, segundosPorPulso: 0.6 }];
+    let cuenta = 0;
+    for (let i = 0; i < lista.length; i++) {
+        const firma = lista[i];
+        const inicio = firma.time || 0;
+        const fin = (i + 1 < lista.length) ? lista[i + 1].time : Infinity;
+        const durCompas = Math.max(0.01, (firma.pulsos || 4) * (firma.segundosPorPulso || 0.6));
+        if (tiempo + 1e-6 < inicio) break;
+        if (tiempo + 1e-9 < fin) {
+            return cuenta + Math.floor((tiempo - inicio) / durCompas + 1e-9);
+        }
+        cuenta += Math.max(0, Math.floor((fin - inicio) / durCompas + 1e-9));
+    }
+    const ultima = lista[lista.length - 1];
+    const dur = Math.max(0.01, (ultima.pulsos || 4) * (ultima.segundosPorPulso || 0.6));
+    return cuenta + Math.floor((tiempo - (ultima.time || 0)) / dur + 1e-9);
+}
+
+function armarCompasesSimon(notasRaw, datosNotas) {
+    const firmas = firmasCompasDesdeDatos(datosNotas);
+    const notas = (notasRaw || []).map(n => ({
+        midi: typeof n.midi === "number" ? n.midi : midiDesdeNombreIngles(n.name || n.note || "C4"),
+        tiempo: typeof n.time === "number" ? n.time : 0,
+        duracion: n.duration || 0.75
+    }));
+    const porCompas = new Map();
+    notas.forEach(nota => {
+        const idx = indiceCompasDeTiempoSimon(nota.tiempo, firmas);
+        if (!porCompas.has(idx)) porCompas.set(idx, []);
+        porCompas.get(idx).push(nota);
+    });
+    return [...porCompas.keys()].sort((a, b) => a - b)
+        .map(idx => porCompas.get(idx))
+        .filter(grupo => grupo && grupo.length);
+}
+
+async function empezarSimonConPieza() {
+    const sel = document.getElementById("selector-simon");
+    const pieza = ((sel && sel.value) || document.getElementById("selector-cancion").value || PIEZA_PRUEBA_FRERE).trim();
+    if (!pieza) return;
+
+    const tokenCarga = ++idSimon;
+    temporizadoresSimon.forEach(clearTimeout);
+    temporizadoresSimon = [];
+    apagarGajosSimon();
+    marcarDiscoSimonEsperando(false);
+    trasFalloSimon = false;
+    faseSimon = "demo";
+    pasoSimon = 0;
+    secuenciaSimon = [];
+    compasesSimon = [];
+    indiceCompasSimon = 0;
+    huboFalloSimon = false;
+    modoCompletoSimon = false;
+    mensajeSimon("Cargando…");
+
+    asegurarAudioContext();
+    if (audioContext.state === "suspended") await audioContext.resume();
+    await cargarPiano();
+    if (tokenCarga !== idSimon) return;
+
+    const resNotas = await cargarArchivoCancion(`${pieza}.json`);
+    if (tokenCarga !== idSimon) return;
+    if (!resNotas.ok) {
+        mensajeSimon(`No se encuentra «${pieza}.json».`, "simon-mal");
+        return;
+    }
+
+    const datosNotas = await resNotas.json();
+    let notasRaw = datosNotas.notes || datosNotas;
+    if (datosNotas.tracks && Array.isArray(datosNotas.tracks)) {
+        const pista = datosNotas.tracks.find(t => t.notes && t.notes.length > 0);
+        if (pista) notasRaw = pista.notes;
+    }
+    if (!Array.isArray(notasRaw) || !notasRaw.length) {
+        mensajeSimon("Esta pieza no tiene notas.", "simon-mal");
+        return;
+    }
+
+    // Sin calibración: notas y compases tal cual en la partitura.
+    compasesSimon = armarCompasesSimon(notasRaw, datosNotas);
+    if (!compasesSimon.length || tokenCarga !== idSimon) return;
+
+    reproducirDemoSimon(compasesSimon[0]);
 }
 
 function alCambiarMetronomoRitmo() {
