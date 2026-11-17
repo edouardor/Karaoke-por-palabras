@@ -70,8 +70,9 @@
             <li><strong>Cómo se empieza:</strong> cantas una nota cómoda; luego la oyes. La primera flor está a esa misma altura (unísono).</li>
             <li><strong>Cómo se juega:</strong> si libas la flor, pasa a otra pantalla con una flor a la 2ª mayor, luego 3ª mayor, 4ª mayor y 5ª mayor; después baja 4ª, 3ª, 2ª y unísono.</li>
             <li><strong>Si se escapa:</strong> oyes la nota de base y la del intervalo; la misma flor vuelve. Solo cuentan las flores libadas <strong>a la primera</strong>.</li>
-            <li><strong>Las 9 primeras:</strong> la nota del intervalo <strong>suena por defecto</strong> al llegar a cada flor. Cuando las hayas libado correctamente, un aviso te dice que esas notas <strong>dejan de sonar</strong>.</li>
-            <li><strong>Secuencia final:</strong> el colibrí vuela de izquierda a derecha; hay que <strong>cantar</strong> cada intervalo (la nota solo suena si libas).</li>
+            <li><strong>9 primeras:</strong> una flor tras otra, siempre <strong>con guía</strong> (suena la nota del intervalo).</li>
+            <li><strong>9 siguientes:</strong> la secuencia junta, también <strong>con guía</strong>.</li>
+            <li><strong>Luego:</strong> mensaje «Ahora canta sin las notas guía la secuencia» y se repiten esas 9 <strong>sin guía</strong> (la nota solo suena si libas).</li>
         </ol>
         <p class="ayuda-aviso">Con auriculares el micrófono oye mejor tu voz y no la guía del piano.</p>
         <button type="button" class="btn-ayuda-cerrar" onclick="cerrarAyuda()">Entendido</button>
@@ -147,7 +148,7 @@
             <div id="pantalla-colibri" class="pantalla-ritmo" hidden>
                 <h3 class="titulo-apartado-juego">Juegos</h3>
                 <h4 class="titulo-juego-activo">Colibrí 🌺</h4>
-                <p class="ayuda-ritmo">Cantas una nota cómoda y la oyes. Luego el colibrí liba flores a la altura de intervalos: unísono, 2ª, 3ª, 4ª y 5ª mayor, y de vuelta hasta el unísono.</p>
+                <p class="ayuda-ritmo">Cantas una nota cómoda y la oyes. Primero 9 flores con guía, luego la secuencia con guía, y al final la misma secuencia sin notas guía.</p>
                 <div class="acciones-ritmo">
                     <button type="button" class="btn-empezar-ritmo" onclick="empezarColibri()">Empezar colibrí ▶</button>
                     <button type="button" class="btn-volver-juegos" onclick="volverAListaJuegos()">← Juegos</button>
@@ -323,6 +324,6 @@
 
     <!--cargamos el motor -->
     
-    <script src="./app.js?v=colibri9"></script>
+    <script src="./app.js?v=colibri11"></script>
 </body>
 </html>

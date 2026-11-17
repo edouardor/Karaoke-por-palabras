@@ -116,16 +116,17 @@ let indiceIntervaloColibri = 0;
 let florColibri = null;                  // { midi, etiqueta, tLlegada, el, libada, escapada, sonada }
 let aciertosColibri = 0;                 // solo libadas a la primera (sin escape previo)
 let reintentoIntervaloColibri = false;   // true si esta flor ya se escapó
-let guiaNotasColibri = true;             // suenan las notas del intervalo por defecto (9 primeras)
+let guiaNotasColibri = true;             // suenan las notas del intervalo por defecto
 let animacionColibriId = 0;
 let relojColibri = { t0: 0, tiempoBase: 0 };
 let velocidadColibri = 0.7;
 let escenaMidiMinColibri = 42;
 let escenaMidiMaxColibri = 60;
 let framesLibandoColibri = 0;
-let floresSecuenciaColibri = [];         // flores de la secuencia final (como cerezas del pájaro)
+let floresSecuenciaColibri = [];         // flores de la secuencia (con o sin guía)
 let framesLibandoSecuenciaColibri = {};  // índice → frames afinados seguidos
 let pausaColibriEraSecuencia = false;
+let pasadaSecuenciaColibri = 0;          // 0 = aún no; 1 = con guía; 2 = sin guía
 const COLIBRI_MARGEN_CENTS = 70;
 const COLIBRI_ANTICIPO = 2.4;
 const COLIBRI_X_INICIO = 10;             // % : el colibrí parte de la izquierda
@@ -133,6 +134,7 @@ const COLIBRI_X_FLOR = 82;               // % : la flor se queda fija a la derec
 const COLIBRI_FRAMES_LIBAR = 10;         // ~ Frames seguidos afinados cerca de la flor
 const COLIBRI_VELOCIDAD_INICIAL = 0.7;
 const COLIBRI_GAP_SECUENCIA_S = 2;       // s musicales entre flores de la secuencia
+const COLIBRI_GUIA_ANTES = 0.7;          // s musicales: la guía suena antes de llegar a la flor
 const INTERVALOS_COLIBRI = [
     { semis: 0, etiqueta: "Unísono" },
     { semis: 2, etiqueta: "2ª mayor" },
@@ -3128,6 +3130,7 @@ function detenerJuegoColibri() {
     framesLibandoColibri = 0;
     reintentoIntervaloColibri = false;
     guiaNotasColibri = true;
+    pasadaSecuenciaColibri = 0;
     pausaColibriEraSecuencia = false;
     const escenario = document.getElementById("escenario-colibri");
     if (escenario) escenario.hidden = true;
@@ -3213,6 +3216,7 @@ async function empezarColibri() {
         aciertosColibri = 0;
         reintentoIntervaloColibri = false;
         guiaNotasColibri = true;
+        pasadaSecuenciaColibri = 0;
         indiceIntervaloColibri = 0;
         midiSuaveColibri = null;
         actualizarBotonAyuda();
@@ -3243,6 +3247,7 @@ function reiniciarJuegoColibri() {
     aciertosColibri = 0;
     reintentoIntervaloColibri = false;
     guiaNotasColibri = true;
+    pasadaSecuenciaColibri = 0;
     indiceIntervaloColibri = 0;
     midiSuaveColibri = null;
     florColibri = null;
@@ -3338,6 +3343,7 @@ function arrancarPartidaColibri() {
     aciertosColibri = 0;
     reintentoIntervaloColibri = false;
     guiaNotasColibri = true;
+    pasadaSecuenciaColibri = 0;
     escenaMidiMinColibri = midiBaseColibri - 1;
     escenaMidiMaxColibri = midiBaseColibri + 8;
     document.getElementById("palabra-pantalla").innerText = "🌺";
@@ -3519,7 +3525,8 @@ function avanzarTrasLibarColibri() {
     const siguiente = indiceIntervaloColibri + 1;
     if (siguiente >= INTERVALOS_COLIBRI.length) {
         setTimeout(() => {
-            if (modoColibri) avisarFinGuiaIntervalosColibri();
+            // Tras las 9 primeras: secuencia junta, todavía con guía.
+            if (modoColibri) arrancarSecuenciaColibri(true);
         }, 700);
         return;
     }
@@ -3539,8 +3546,8 @@ function avanzarTrasLibarColibri() {
     }, 700);
 }
 
-function avisarFinGuiaIntervalosColibri() {
-    if (!modoColibri || estadoColibri === "fin" || estadoColibri === "secuencia") return;
+function avisarSecuenciaSinGuiaColibri() {
+    if (!modoColibri || estadoColibri === "fin") return;
     if (animacionColibriId) {
         cancelAnimationFrame(animacionColibriId);
         animacionColibriId = 0;
@@ -3555,17 +3562,16 @@ function avisarFinGuiaIntervalosColibri() {
     document.getElementById("palabra-pantalla").innerText = "🌺";
     document.getElementById("secuencia-visual").innerHTML =
         "<div class='resumen-final'>" +
-        "<div class='resumen-titulo'>¡9 primeras conseguidas!</div>" +
-        "<div class='resumen-logro'>Las notas del intervalo dejan de sonar. Ahora canta tú la secuencia.</div>" +
+        "<div class='resumen-titulo'>Ahora canta sin las notas guía la secuencia</div>" +
         "</div>";
     document.getElementById("evaluacion").innerHTML =
-        "<span class='success'>Aviso · las notas del intervalo ya no suenan solas</span>";
+        "<span class='success'>Sin guía · canta tú los intervalos</span>";
     const etiquetaEl = document.getElementById("etiqueta-intervalo-colibri");
     if (etiquetaEl) etiquetaEl.textContent = "Sin notas guía";
     setTimeout(() => {
         if (!modoColibri || estadoColibri !== "aviso") return;
         document.getElementById("secuencia-visual").innerHTML = "";
-        arrancarSecuenciaFinalColibri();
+        arrancarSecuenciaColibri(false);
     }, 3500);
 }
 
@@ -3577,21 +3583,24 @@ function terminarJuegoColibri() {
     }
     ponerGuiaSonando(false);
     silenciarMelodia();
-    avisarFinGuiaIntervalosColibri();
+    arrancarSecuenciaColibri(true);
 }
 
-function arrancarSecuenciaFinalColibri() {
+function arrancarSecuenciaColibri(conGuia) {
     if (!modoColibri) return;
     estadoColibri = "secuencia";
+    guiaNotasColibri = !!conGuia;
+    pasadaSecuenciaColibri = conGuia ? 1 : 2;
     framesLibandoSecuenciaColibri = {};
     pausaColibriEraSecuencia = false;
     document.getElementById("palabra-pantalla").innerText = "🌺";
     document.getElementById("secuencia-visual").innerHTML = "";
     document.getElementById("zona-reinicio").style.display = "none";
-    document.getElementById("evaluacion").innerText =
-        "Secuencia · canta cada intervalo (como el pájaro)";
+    document.getElementById("evaluacion").innerText = conGuia
+        ? "Secuencia con guía · canta cada intervalo"
+        : "Secuencia sin guía · canta cada intervalo";
     const etiquetaEl = document.getElementById("etiqueta-intervalo-colibri");
-    if (etiquetaEl) etiquetaEl.textContent = "Secuencia";
+    if (etiquetaEl) etiquetaEl.textContent = conGuia ? "Secuencia · con guía" : "Secuencia · sin guía";
     const escenario = document.getElementById("escenario-colibri");
     if (escenario) escenario.hidden = false;
 
@@ -3622,7 +3631,8 @@ function arrancarSecuenciaFinalColibri() {
             tLlegada,
             el,
             libada: false,
-            escapada: false
+            escapada: false,
+            sonada: false
         };
     });
     const colibri = document.getElementById("colibri");
@@ -3665,9 +3675,17 @@ function bucleSecuenciaFinalColibri() {
 
     const ventana = 0.28;
     floresSecuenciaColibri.forEach((flor, i) => {
-        if (flor.libada || flor.escapada) return;
         flor.el.style.left = xFlorFijaPorTiempo(flor.tLlegada, tUltima) + "%";
         flor.el.style.top = midiAPorcentajeColibri(flor.midi) + "%";
+
+        // Pasada con guía: la nota suena un poco antes de que el colibrí llegue.
+        const tGuia = flor.tLlegada - COLIBRI_GUIA_ANTES;
+        if (guiaNotasColibri && !flor.sonada && t >= tGuia) {
+            flor.sonada = true;
+            sonarNota(nombreInglesDesdeMidi(flor.midi), 0.85, VOLUMEN_MELODIA_GUIA);
+        }
+
+        if (flor.libada || flor.escapada) return;
 
         const cercaX = Math.abs(t - flor.tLlegada) <= ventana;
         if (cercaX && midiSuaveColibri != null) {
@@ -3678,8 +3696,11 @@ function bucleSecuenciaFinalColibri() {
                     flor.libada = true;
                     flor.el.classList.add("libada");
                     actualizarMarcadorSecuenciaColibri();
-                    // Como el pájaro: la nota solo suena al libar.
-                    sonarNota(nombreInglesDesdeMidi(flor.midi), 0.55, VOLUMEN_MELODIA * 0.9);
+                    // Sin guía: la nota solo suena al libar (como el pájaro).
+                    if (!guiaNotasColibri) {
+                        sonarNota(nombreInglesDesdeMidi(flor.midi), 0.55, VOLUMEN_MELODIA * 0.9);
+                        flor.sonada = true;
+                    }
                     if (colibri) {
                         colibri.classList.add("libando");
                         setTimeout(() => colibri.classList.remove("libando"), 220);
@@ -3701,7 +3722,11 @@ function bucleSecuenciaFinalColibri() {
     });
 
     if (ultima && t > ultima.tLlegada + 1.2) {
-        mostrarResumenFinalColibri();
+        if (pasadaSecuenciaColibri < 2) {
+            avisarSecuenciaSinGuiaColibri();
+        } else {
+            mostrarResumenFinalColibri();
+        }
         return;
     }
     animacionColibriId = requestAnimationFrame(bucleSecuenciaFinalColibri);
