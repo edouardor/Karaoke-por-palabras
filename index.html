@@ -63,6 +63,20 @@
         <button type="button" class="btn-ayuda-cerrar" onclick="cerrarAyuda()">Entendido</button>
     </dialog>
 
+    <dialog id="ayuda-colibri" class="ayuda" onclick="if (event.target === this) cerrarAyuda()">
+        <h3>Ayuda colibrí</h3>
+        <ol>
+            <li><strong>De qué se trata:</strong> un colibrí sube o baja con tu voz y liba flores a la altura de intervalos a partir de tu nota inicial.</li>
+            <li><strong>Cómo se empieza:</strong> cantas una nota cómoda; luego la oyes. La primera flor está a esa misma altura (unísono).</li>
+            <li><strong>Cómo se juega:</strong> si libas la flor, pasa a otra pantalla con una flor a la 2ª mayor, luego 3ª mayor, 4ª mayor y 5ª mayor; después baja 4ª, 3ª, 2ª y unísono.</li>
+            <li><strong>Si se escapa:</strong> oyes la nota de base y la del intervalo; la misma flor vuelve. Solo cuentan las flores libadas <strong>a la primera</strong>.</li>
+            <li><strong>Las 9 primeras:</strong> la nota del intervalo <strong>suena por defecto</strong> al llegar a cada flor. Cuando las hayas libado correctamente, un aviso te dice que esas notas <strong>dejan de sonar</strong>.</li>
+            <li><strong>Secuencia final:</strong> el colibrí vuela de izquierda a derecha; hay que <strong>cantar</strong> cada intervalo (la nota solo suena si libas).</li>
+        </ol>
+        <p class="ayuda-aviso">Con auriculares el micrófono oye mejor tu voz y no la guía del piano.</p>
+        <button type="button" class="btn-ayuda-cerrar" onclick="cerrarAyuda()">Entendido</button>
+    </dialog>
+
     <dialog id="canciones-hoy" class="ayuda" onclick="if (event.target === this) cerrarCancionesHoy()">
         <h3 id="titulo-canciones-hoy">Enhorabuena</h3>
         <p id="enhorabuena-hoy" class="enhorabuena-hoy"></p>
@@ -94,10 +108,11 @@
                 </div>
                 <div class="fila-juego">
                     <button type="button" onclick="empezarJuego(2)">2</button>
-                    <span class="etiqueta-juego">pájaro <span class="emoji-pajaro">🐦</span>🍒</span>
+                    <span class="etiqueta-juego">colibrí 🌺</span>
                 </div>
                 <div class="fila-juego">
                     <button type="button" onclick="empezarJuego(3)">3</button>
+                    <span class="etiqueta-juego">pájaro 🍒</span>
                 </div>
                 <div class="fila-juego">
                     <button type="button" onclick="empezarJuego(4)">4</button>
@@ -120,12 +135,21 @@
             </div>
             <div id="pantalla-pajaro" class="pantalla-ritmo" hidden>
                 <h3 class="titulo-apartado-juego">Juegos</h3>
-                <h4 class="titulo-juego-activo">Pájaro <span class="emoji-pajaro">🐦</span>🍒</h4>
+                <h4 class="titulo-juego-activo">Pájaro 🍒</h4>
                 <label for="selector-pajaro" class="etiqueta-elige-ritmo">Elige una pieza para el pájaro:</label>
                 <select id="selector-pajaro"></select>
                 <p class="ayuda-ritmo">El pájaro sube y baja con tu voz y recoge las cerezas (con la sílaba debajo). En las piezas de prueba eliges la nota de partida; en las demás oyes la primera nota, como en los otros modos.</p>
                 <div class="acciones-ritmo">
                     <button type="button" class="btn-empezar-ritmo" onclick="empezarPajaroConPieza()">Empezar pájaro ▶</button>
+                    <button type="button" class="btn-volver-juegos" onclick="volverAListaJuegos()">← Juegos</button>
+                </div>
+            </div>
+            <div id="pantalla-colibri" class="pantalla-ritmo" hidden>
+                <h3 class="titulo-apartado-juego">Juegos</h3>
+                <h4 class="titulo-juego-activo">Colibrí 🌺</h4>
+                <p class="ayuda-ritmo">Cantas una nota cómoda y la oyes. Luego el colibrí liba flores a la altura de intervalos: unísono, 2ª, 3ª, 4ª y 5ª mayor, y de vuelta hasta el unísono.</p>
+                <div class="acciones-ritmo">
+                    <button type="button" class="btn-empezar-ritmo" onclick="empezarColibri()">Empezar colibrí ▶</button>
                     <button type="button" class="btn-volver-juegos" onclick="volverAListaJuegos()">← Juegos</button>
                 </div>
             </div>
@@ -188,7 +212,8 @@
             <button class="btn-home" onclick="regresarAlMenu()" aria-label="Volver al inicio" title="Volver al inicio">Inicio 🏠</button>
             <button type="button" id="btn-volver-calentamiento" class="btn-home" hidden onclick="volverACalentamientos()">Calentamiento 🔥</button>
             <button type="button" id="btn-volver-ritmo" class="btn-home" hidden onclick="volverAPantallaRitmo()">Ritmo <img src="./imagenes/tambor-ritmo.jpg?v=2" alt="" class="icono-tambor"></button>
-            <button type="button" id="btn-volver-pajaro" class="btn-home" hidden onclick="volverAPantallaPajaro()">Pájaro <span class="emoji-pajaro">🐦</span></button>
+            <button type="button" id="btn-volver-pajaro" class="btn-home" hidden onclick="volverAPantallaPajaro()">Pájaro 🍒</button>
+            <button type="button" id="btn-volver-colibri" class="btn-home" hidden onclick="volverAPantallaColibri()">Colibrí 🌺</button>
         </div>
 
         <div class="navegacion-palabra">
@@ -220,6 +245,27 @@
                 </svg>
             </div>
             <div id="cerezas-pajaro" class="cerezas-pajaro"></div>
+        </div>
+        <div id="escenario-colibri" class="escenario-colibri" hidden>
+            <div id="marcador-colibri" class="marcador-colibri">1 / 9</div>
+            <div id="etiqueta-intervalo-colibri" class="etiqueta-intervalo-colibri">Unísono</div>
+            <div id="lineas-colibri" class="lineas-colibri" aria-hidden="true"></div>
+            <div id="colibri" class="colibri" aria-hidden="true">
+                <svg class="colibri-dibujo" viewBox="0 0 96 56" width="64" height="38" aria-hidden="true">
+                    <ellipse cx="42" cy="30" rx="18" ry="11" fill="#1abc9c"/>
+                    <path d="M26 30 Q8 18 18 12 Q28 22 30 32 Z" fill="#16a085"/>
+                    <ellipse cx="60" cy="24" rx="12" ry="10" fill="#48c9b0"/>
+                    <circle cx="64" cy="21" r="2.6" fill="#1a1a1a"/>
+                    <circle cx="65" cy="20.2" r="0.9" fill="#fff"/>
+                    <path class="pico-cerrado" d="M70 23 L94 26 L70 29 Z" fill="#e67e22"/>
+                    <g class="pico-abierto">
+                        <path d="M70 20 L94 18 L70 26 Z" fill="#e67e22"/>
+                        <path d="M70 27 L94 34 L70 30 Z" fill="#d35400"/>
+                    </g>
+                    <path d="M40 22 Q52 4 62 18 Q50 20 40 22 Z" fill="rgba(255,255,255,0.45)"/>
+                </svg>
+            </div>
+            <div id="flores-colibri" class="flores-colibri"></div>
         </div>
         <div id="secuencia-visual" class="secuencia-cajas"></div>
 
@@ -258,6 +304,15 @@
             <button id="btn-seguir-pajaro" class="btn-escucha" onclick="seguirPajaro()" style="display: none;">Seguir pájaro ▶</button>
             <button id="btn-repetir-pajaro" class="btn-escucha" onclick="reiniciarJuegoPajaro()" style="display: none;">Otra vez ↺</button>
         </div>
+
+        <div id="controles-colibri" class="controles-escucha" style="display: none;">
+            <label class="control-velocidad" for="velocidad-colibri">Velocidad <span id="txt-velocidad-colibri">×0.7</span>
+                <input type="range" id="velocidad-colibri" min="0.5" max="2" value="0.7" step="0.05" oninput="cambiarVelocidadColibri(this.value)">
+            </label>
+            <button id="btn-pausa-colibri" class="btn-pausa" onclick="pausarColibri()" aria-label="Pausa" title="Pausa">Pausa ❚❚</button>
+            <button id="btn-seguir-colibri" class="btn-escucha" onclick="seguirColibri()" style="display: none;">Seguir colibrí ▶</button>
+            <button id="btn-repetir-colibri" class="btn-escucha" onclick="reiniciarJuegoColibri()" style="display: none;">Otra vez ↺</button>
+        </div>
         
         <div id="zona-reinicio" style="display: none;">
             <button type="button" class="btn-hoy" onclick="abrirCancionesHoy()">Canciones estudiadas hoy 📋</button>
@@ -268,6 +323,6 @@
 
     <!--cargamos el motor -->
     
-    <script src="./app.js?v=piano54"></script>
+    <script src="./app.js?v=colibri9"></script>
 </body>
 </html>

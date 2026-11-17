@@ -97,9 +97,8 @@ let escenaMidiMin = 42;
 let escenaMidiMax = 60;
 const PIEZA_PRUEBA_FRERE = "Frere Jacques";
 const PIEZAS_CON_CALIBRACION = [PIEZA_PRUEBA_FRERE, "Cumpleanos Feliz"];
-const EMOJI_PAJARO = '<span class="emoji-pajaro">🐦</span>';
 function tituloPajaroHtml(conCereza) {
-    return conCereza ? `Pájaro ${EMOJI_PAJARO}🍒` : `Pájaro ${EMOJI_PAJARO}`;
+    return conCereza ? "Pájaro 🍒" : "Pájaro";
 }
 
 function esPiezaConCalibracion(pieza) {
@@ -108,6 +107,43 @@ function esPiezaConCalibracion(pieza) {
 const PAJARO_MARGEN_CENTS = 70;          // ventana para recoger cereza
 const PAJARO_ANTICIPO = 2.2;             // s: la cereza aparece a la derecha antes de llegar
 const PAJARO_X_PAJARO = 12;              // % desde la izquierda
+// ---- Juego del colibrí: voz + flores en intervalos desde la nota inicial ----
+let modoColibri = false;
+let estadoColibri = "fin";               // 'calibracion' | 'prep' | 'jugando' | 'pausada' | 'transicion' | 'fin'
+let midiBaseColibri = 48;
+let midiSuaveColibri = null;
+let indiceIntervaloColibri = 0;
+let florColibri = null;                  // { midi, etiqueta, tLlegada, el, libada, escapada, sonada }
+let aciertosColibri = 0;                 // solo libadas a la primera (sin escape previo)
+let reintentoIntervaloColibri = false;   // true si esta flor ya se escapó
+let guiaNotasColibri = true;             // suenan las notas del intervalo por defecto (9 primeras)
+let animacionColibriId = 0;
+let relojColibri = { t0: 0, tiempoBase: 0 };
+let velocidadColibri = 0.7;
+let escenaMidiMinColibri = 42;
+let escenaMidiMaxColibri = 60;
+let framesLibandoColibri = 0;
+let floresSecuenciaColibri = [];         // flores de la secuencia final (como cerezas del pájaro)
+let framesLibandoSecuenciaColibri = {};  // índice → frames afinados seguidos
+let pausaColibriEraSecuencia = false;
+const COLIBRI_MARGEN_CENTS = 70;
+const COLIBRI_ANTICIPO = 2.4;
+const COLIBRI_X_INICIO = 10;             // % : el colibrí parte de la izquierda
+const COLIBRI_X_FLOR = 82;               // % : la flor se queda fija a la derecha
+const COLIBRI_FRAMES_LIBAR = 10;         // ~ Frames seguidos afinados cerca de la flor
+const COLIBRI_VELOCIDAD_INICIAL = 0.7;
+const COLIBRI_GAP_SECUENCIA_S = 2;       // s musicales entre flores de la secuencia
+const INTERVALOS_COLIBRI = [
+    { semis: 0, etiqueta: "Unísono" },
+    { semis: 2, etiqueta: "2ª mayor" },
+    { semis: 4, etiqueta: "3ª mayor" },
+    { semis: 5, etiqueta: "4ª mayor" },
+    { semis: 7, etiqueta: "5ª mayor" },
+    { semis: 5, etiqueta: "4ª mayor" },
+    { semis: 4, etiqueta: "3ª mayor" },
+    { semis: 2, etiqueta: "2ª mayor" },
+    { semis: 0, etiqueta: "Unísono" }
+];
 // ---- Modo karaoke: la melodía sigue sola y se puntúan las notas al vuelo ----
 let modoKaraoke = false;
 let estadoKaraoke = 'reproduciendo';     // 'cuenta' | 'reproduciendo' | 'pausada' | 'fin'
@@ -180,15 +216,25 @@ function enAyudaPajaro() {
     return document.body.classList.contains("vista-pajaro") || !!modoPajaro;
 }
 
+function enAyudaColibri() {
+    return document.body.classList.contains("vista-colibri") || !!modoColibri;
+}
+
 function actualizarBotonAyuda() {
     const btn = document.getElementById("btn-ayuda");
     if (!btn) return;
-    if (enAyudaPajaro()) btn.textContent = "Ayuda pájaro ❓";
+    if (enAyudaColibri()) btn.textContent = "Ayuda colibrí ❓";
+    else if (enAyudaPajaro()) btn.textContent = "Ayuda pájaro ❓";
     else if (enAyudaRitmo()) btn.textContent = "Ayuda ritmo ❓";
     else btn.textContent = "Ayuda ❓";
 }
 
 function abrirAyuda() {
+    if (enAyudaColibri()) {
+        const dialogo = document.getElementById("ayuda-colibri");
+        if (dialogo) dialogo.showModal();
+        return;
+    }
     if (enAyudaPajaro()) {
         const dialogo = document.getElementById("ayuda-pajaro");
         if (dialogo) dialogo.showModal();
@@ -206,9 +252,11 @@ function cerrarAyuda() {
     const general = document.getElementById("ayuda");
     const ritmo = document.getElementById("ayuda-ritmo");
     const pajaro = document.getElementById("ayuda-pajaro");
+    const colibri = document.getElementById("ayuda-colibri");
     if (general && general.open) general.close();
     if (ritmo && ritmo.open) ritmo.close();
     if (pajaro && pajaro.open) pajaro.close();
+    if (colibri && colibri.open) colibri.close();
 }
 
 // El margen del menú (15, 30, 45 o 60 cents) es el que usa el entrenamiento y el karaoke.
@@ -290,7 +338,11 @@ function textoPiezaEstudiada(pieza) {
         if (typeof p.momento === "number" && typeof p.duracion === "number") {
             texto += ` — momento ${p.momento}% · duración ${p.duracion}%`;
         } else if (typeof p.aciertos === "number" && typeof p.total === "number") {
-            texto += ` — ${p.aciertos} de ${p.total} cerezas`;
+            const juego = (pieza.juego || "").toLowerCase();
+            const unidad = juego.includes("colibr") ? "flores"
+                : (juego.includes("pájaro") || juego.includes("pajaro")) ? "cerezas"
+                : "aciertos";
+            texto += ` — ${p.aciertos} de ${p.total} ${unidad}`;
         }
         return texto;
     }
@@ -867,6 +919,7 @@ function cancelarTemporizadores() {
     silenciarSonidoEscucha();
     detenerJuegoRitmo();
     detenerJuegoPajaro();
+    detenerJuegoColibri();
     modoEscucha = false;
     modoKaraoke = false;
     notaEnJuicio = null;
@@ -880,7 +933,7 @@ function actualizarFlechas() {
     const btnSig = document.getElementById('btn-siguiente');
     if (!btnAnt || !btnSig) return;
     // En karaoke/ritmo/pájaro la pieza va sola: las flechas no aplican.
-    if (modoKaraoke || modoRitmo || modoPajaro) {
+    if (modoKaraoke || modoRitmo || modoPajaro || modoColibri) {
         btnAnt.style.visibility = 'hidden';
         btnSig.style.visibility = 'hidden';
         return;
@@ -1138,6 +1191,10 @@ function bucleDeAudio() {
     if (modoCalibracion) { procesarCalibracion(); return; }
     if (modoPajaro) {
         if (estadoPajaro === "calibracion") procesarCalibracionPajaro();
+        return;
+    }
+    if (modoColibri) {
+        if (estadoColibri === "calibracion") procesarCalibracionColibri();
         return;
     }
     if (modoKaraoke || modoEscucha || modoRitmo) {
@@ -1636,7 +1693,8 @@ function mostrarJuegos() {
     cerrarCalentamientos(false);
     cerrarPantallaRitmo();
     cerrarPantallaPajaro();
-    document.body.classList.remove("vista-ritmo", "vista-pajaro");
+    cerrarPantallaColibri();
+    document.body.classList.remove("vista-ritmo", "vista-pajaro", "vista-colibri");
     document.body.classList.add("vista-juegos");
     document.getElementById("lista-juegos").hidden = false;
     document.getElementById("botones-inicio").style.display = "none";
@@ -1647,10 +1705,12 @@ function cerrarJuegos(restaurarBotones = true) {
     document.body.classList.remove("vista-juegos");
     document.body.classList.remove("vista-ritmo");
     document.body.classList.remove("vista-pajaro");
+    document.body.classList.remove("vista-colibri");
     const lista = document.getElementById("lista-juegos");
     if (lista) lista.hidden = true;
     cerrarPantallaRitmo();
     cerrarPantallaPajaro();
+    cerrarPantallaColibri();
     if (restaurarBotones) document.getElementById("botones-inicio").style.display = "flex";
     actualizarBotonAyuda();
 }
@@ -1680,12 +1740,18 @@ function cerrarPantallaPajaro() {
     if (pantalla) pantalla.hidden = true;
 }
 
+function cerrarPantallaColibri() {
+    const pantalla = document.getElementById("pantalla-colibri");
+    if (pantalla) pantalla.hidden = true;
+}
+
 function mostrarPantallaRitmo() {
     ocultarResultadoMicrofono();
     rellenarSelectorRitmo();
     cerrarPantallaPajaro();
+    cerrarPantallaColibri();
     document.getElementById("lista-juegos").hidden = true;
-    document.body.classList.remove("vista-juegos", "vista-pajaro");
+    document.body.classList.remove("vista-juegos", "vista-pajaro", "vista-colibri");
     document.body.classList.add("vista-ritmo");
     document.getElementById("pantalla-ritmo").hidden = false;
     document.getElementById("botones-inicio").style.display = "none";
@@ -1705,11 +1771,24 @@ function rellenarSelectorPajaro() {
 function mostrarPantallaPajaro() {
     ocultarResultadoMicrofono();
     cerrarPantallaRitmo();
+    cerrarPantallaColibri();
     rellenarSelectorPajaro();
     document.getElementById("lista-juegos").hidden = true;
-    document.body.classList.remove("vista-juegos", "vista-ritmo");
+    document.body.classList.remove("vista-juegos", "vista-ritmo", "vista-colibri");
     document.body.classList.add("vista-pajaro");
     document.getElementById("pantalla-pajaro").hidden = false;
+    document.getElementById("botones-inicio").style.display = "none";
+    actualizarBotonAyuda();
+}
+
+function mostrarPantallaColibri() {
+    ocultarResultadoMicrofono();
+    cerrarPantallaRitmo();
+    cerrarPantallaPajaro();
+    document.getElementById("lista-juegos").hidden = true;
+    document.body.classList.remove("vista-juegos", "vista-ritmo", "vista-pajaro");
+    document.body.classList.add("vista-colibri");
+    document.getElementById("pantalla-colibri").hidden = false;
     document.getElementById("botones-inicio").style.display = "none";
     actualizarBotonAyuda();
 }
@@ -1717,7 +1796,8 @@ function mostrarPantallaPajaro() {
 function volverAListaJuegos() {
     cerrarPantallaRitmo();
     cerrarPantallaPajaro();
-    document.body.classList.remove("vista-ritmo", "vista-pajaro");
+    cerrarPantallaColibri();
+    document.body.classList.remove("vista-ritmo", "vista-pajaro", "vista-colibri");
     document.body.classList.add("vista-juegos");
     document.getElementById("lista-juegos").hidden = false;
     actualizarBotonAyuda();
@@ -1730,6 +1810,10 @@ function empezarJuego(numero) {
         return;
     }
     if (numero === 2) {
+        mostrarPantallaColibri();
+        return;
+    }
+    if (numero === 3) {
         mostrarPantallaPajaro();
         return;
     }
@@ -2580,7 +2664,7 @@ async function cargarMelodiaPajaro(pieza) {
 }
 
 function prepararPantallaJuegoPajaro() {
-    document.body.classList.remove("vista-juegos", "vista-ritmo", "vista-pajaro");
+    document.body.classList.remove("vista-juegos", "vista-ritmo", "vista-pajaro", "vista-colibri");
     document.getElementById("botones-inicio").style.display = "none";
     document.getElementById("zona-seleccion").style.display = "none";
     document.getElementById("zona-reinicio").style.display = "none";
@@ -2588,12 +2672,18 @@ function prepararPantallaJuegoPajaro() {
     document.getElementById("btn-volver-calentamiento").hidden = true;
     document.getElementById("btn-volver-ritmo").hidden = true;
     document.getElementById("btn-volver-pajaro").hidden = false;
+    const btnColibri = document.getElementById("btn-volver-colibri");
+    if (btnColibri) btnColibri.hidden = true;
     document.getElementById("controles-escucha").style.display = "none";
     document.getElementById("controles-karaoke").style.display = "none";
     const contRitmo = document.getElementById("controles-ritmo");
     if (contRitmo) contRitmo.style.display = "none";
+    const contColibri = document.getElementById("controles-colibri");
+    if (contColibri) contColibri.style.display = "none";
     const zonaRitmo = document.getElementById("zona-pulso-ritmo");
     if (zonaRitmo) zonaRitmo.hidden = true;
+    const escenarioColibri = document.getElementById("escenario-colibri");
+    if (escenarioColibri) escenarioColibri.hidden = true;
     document.getElementById("secuencia-visual").innerHTML = "";
     document.getElementById("evaluacion").innerHTML = "";
     const elTitulo = document.getElementById("titulo-cancion");
@@ -2914,6 +3004,739 @@ function terminarJuegoPajaro() {
     anotarJuegoHoy("Pájaro", { aciertos: aciertosPajaro, total });
     document.getElementById("zona-reinicio").style.display = "flex";
     actualizarControlesPajaro();
+    actualizarBotonAyuda();
+}
+
+// ==========================================
+// JUEGO 3: COLIBRÍ E INTERVALOS
+// ==========================================
+function midiAPorcentajeColibri(midi) {
+    const acotado = Math.max(escenaMidiMinColibri, Math.min(escenaMidiMaxColibri, midi));
+    return ((escenaMidiMaxColibri - acotado) / Math.max(0.01, escenaMidiMaxColibri - escenaMidiMinColibri)) * 100;
+}
+
+function actualizarMarcadorColibri() {
+    const el = document.getElementById("marcador-colibri");
+    if (el) el.textContent = `${Math.min(indiceIntervaloColibri + 1, INTERVALOS_COLIBRI.length)} / ${INTERVALOS_COLIBRI.length}`;
+}
+
+function actualizarEtiquetaIntervaloColibri() {
+    const el = document.getElementById("etiqueta-intervalo-colibri");
+    const paso = INTERVALOS_COLIBRI[indiceIntervaloColibri];
+    if (el) el.textContent = paso ? paso.etiqueta : "";
+}
+
+function pintarLineasColibri() {
+    const caja = document.getElementById("lineas-colibri");
+    if (!caja) return;
+    caja.innerHTML = "";
+    const midis = new Set(INTERVALOS_COLIBRI.map(p => midiBaseColibri + p.semis));
+    [...midis].sort((a, b) => a - b).forEach(midi => {
+        const linea = document.createElement("div");
+        linea.className = "linea-tono-colibri" + (midi === midiBaseColibri ? " base" : "");
+        linea.style.top = midiAPorcentajeColibri(midi) + "%";
+        caja.appendChild(linea);
+    });
+}
+
+function tiempoActualColibri() {
+    return relojColibri.tiempoBase + (performance.now() - relojColibri.t0) / 1000 * velocidadColibri;
+}
+
+function cambiarVelocidadColibri(valor) {
+    const nueva = Math.max(0.5, Math.min(2, Number(valor) || 1));
+    const etiqueta = document.getElementById("txt-velocidad-colibri");
+    const control = document.getElementById("velocidad-colibri");
+    if (etiqueta) etiqueta.textContent = `×${nueva.toFixed(2).replace(/\.?0+$/, "")}`;
+    if (control && Number(control.value) !== nueva) control.value = String(nueva);
+    if (modoColibri && (estadoColibri === "jugando" || estadoColibri === "secuencia" || estadoColibri === "pausada")) {
+        const ahora = tiempoActualColibri();
+        relojColibri = { t0: performance.now(), tiempoBase: ahora };
+    }
+    velocidadColibri = nueva;
+}
+
+function gapMusicalSecuenciaColibri() {
+    // A velocidad inicial, ~2 s de reloj entre flores (tiempoActual ya aplica velocidad).
+    return COLIBRI_GAP_SECUENCIA_S * COLIBRI_VELOCIDAD_INICIAL;
+}
+
+function xColibriHaciaFlor(t, tLlegada) {
+    // El colibrí vuela de izquierda a derecha; llega a la flor en tLlegada.
+    const llegada = Math.max(0.05, tLlegada);
+    const progreso = Math.max(0, Math.min(1.15, t / llegada));
+    return COLIBRI_X_INICIO + progreso * (COLIBRI_X_FLOR - COLIBRI_X_INICIO);
+}
+
+function xFlorFijaPorTiempo(tLlegada, tUltima) {
+    const fin = Math.max(0.05, tUltima);
+    return COLIBRI_X_INICIO + (tLlegada / fin) * (COLIBRI_X_FLOR - COLIBRI_X_INICIO);
+}
+
+function actualizarControlesColibri() {
+    const caja = document.getElementById("controles-colibri");
+    if (!caja) return;
+    caja.style.display = modoColibri ? "flex" : "none";
+    if (!modoColibri) return;
+    const enPartida = estadoColibri === "jugando" || estadoColibri === "secuencia";
+    document.getElementById("btn-pausa-colibri").style.display = enPartida ? "inline-block" : "none";
+    document.getElementById("btn-seguir-colibri").style.display = estadoColibri === "pausada" ? "inline-block" : "none";
+    document.getElementById("btn-repetir-colibri").style.display = estadoColibri === "fin" ? "inline-block" : "none";
+}
+
+function pausarColibri() {
+    if (!modoColibri || (estadoColibri !== "jugando" && estadoColibri !== "secuencia")) return;
+    relojColibri = { t0: performance.now(), tiempoBase: tiempoActualColibri() };
+    silenciarMelodia();
+    if (animacionColibriId) {
+        cancelAnimationFrame(animacionColibriId);
+        animacionColibriId = 0;
+    }
+    pausaColibriEraSecuencia = estadoColibri === "secuencia";
+    estadoColibri = "pausada";
+    const colibri = document.getElementById("colibri");
+    if (colibri) colibri.classList.remove("cantando", "libando");
+    document.getElementById("evaluacion").innerText = "⏸ Colibrí en pausa";
+    actualizarControlesColibri();
+}
+
+function seguirColibri() {
+    if (!modoColibri || estadoColibri !== "pausada") return;
+    const eraSecuencia = pausaColibriEraSecuencia && floresSecuenciaColibri.length;
+    estadoColibri = eraSecuencia ? "secuencia" : "jugando";
+    relojColibri = { t0: performance.now(), tiempoBase: relojColibri.tiempoBase };
+    document.getElementById("evaluacion").innerText = eraSecuencia
+        ? "Secuencia · canta cada intervalo"
+        : "Liba la flor con la voz";
+    animacionColibriId = requestAnimationFrame(
+        eraSecuencia ? bucleSecuenciaFinalColibri : bucleJuegoColibri
+    );
+    actualizarControlesColibri();
+}
+
+function detenerJuegoColibri() {
+    if (animacionColibriId) {
+        cancelAnimationFrame(animacionColibriId);
+        animacionColibriId = 0;
+    }
+    modoColibri = false;
+    estadoColibri = "fin";
+    midiSuaveColibri = null;
+    florColibri = null;
+    floresSecuenciaColibri = [];
+    framesLibandoSecuenciaColibri = {};
+    framesLibandoColibri = 0;
+    reintentoIntervaloColibri = false;
+    guiaNotasColibri = true;
+    pausaColibriEraSecuencia = false;
+    const escenario = document.getElementById("escenario-colibri");
+    if (escenario) escenario.hidden = true;
+    const flores = document.getElementById("flores-colibri");
+    if (flores) flores.innerHTML = "";
+    const cont = document.getElementById("controles-colibri");
+    if (cont) cont.style.display = "none";
+    const btnVolver = document.getElementById("btn-volver-colibri");
+    if (btnVolver) btnVolver.hidden = true;
+    actualizarBotonAyuda();
+}
+
+function volverAPantallaColibri() {
+    detenerJuegoColibri();
+    soltarMicrofono();
+    cancelarTemporizadores();
+    document.getElementById("titulo-cancion").style.display = "none";
+    document.getElementById("controles-escucha").style.display = "none";
+    document.getElementById("controles-karaoke").style.display = "none";
+    const contRitmo = document.getElementById("controles-ritmo");
+    if (contRitmo) contRitmo.style.display = "none";
+    const contPajaro = document.getElementById("controles-pajaro");
+    if (contPajaro) contPajaro.style.display = "none";
+    const contColibri = document.getElementById("controles-colibri");
+    if (contColibri) contColibri.style.display = "none";
+    document.getElementById("status-box").style.display = "none";
+    document.getElementById("evaluacion").innerHTML = "";
+    document.getElementById("secuencia-visual").innerHTML = "";
+    document.getElementById("palabra-pantalla").innerText = "...";
+    document.getElementById("zona-reinicio").style.display = "none";
+    document.getElementById("btn-volver-calentamiento").hidden = true;
+    document.getElementById("btn-volver-ritmo").hidden = true;
+    document.getElementById("btn-volver-pajaro").hidden = true;
+    document.getElementById("btn-volver-colibri").hidden = true;
+    document.getElementById("zona-seleccion").style.display = "block";
+    document.getElementById("botones-inicio").style.display = "none";
+    mostrarPantallaColibri();
+    actualizarBotonAyuda();
+}
+
+function prepararPantallaJuegoColibri() {
+    document.body.classList.remove("vista-juegos", "vista-ritmo", "vista-pajaro", "vista-colibri");
+    document.getElementById("botones-inicio").style.display = "none";
+    document.getElementById("zona-seleccion").style.display = "none";
+    document.getElementById("zona-reinicio").style.display = "none";
+    document.getElementById("status-box").style.display = "block";
+    document.getElementById("btn-volver-calentamiento").hidden = true;
+    document.getElementById("btn-volver-ritmo").hidden = true;
+    document.getElementById("btn-volver-pajaro").hidden = true;
+    document.getElementById("btn-volver-colibri").hidden = false;
+    document.getElementById("controles-escucha").style.display = "none";
+    document.getElementById("controles-karaoke").style.display = "none";
+    const contRitmo = document.getElementById("controles-ritmo");
+    if (contRitmo) contRitmo.style.display = "none";
+    const contPajaro = document.getElementById("controles-pajaro");
+    if (contPajaro) contPajaro.style.display = "none";
+    const zonaRitmo = document.getElementById("zona-pulso-ritmo");
+    if (zonaRitmo) zonaRitmo.hidden = true;
+    const escenarioPajaro = document.getElementById("escenario-pajaro");
+    if (escenarioPajaro) escenarioPajaro.hidden = true;
+    document.getElementById("secuencia-visual").innerHTML = "";
+    document.getElementById("evaluacion").innerHTML = "";
+    const elTitulo = document.getElementById("titulo-cancion");
+    if (elTitulo) {
+        elTitulo.textContent = "· Colibrí 🌺";
+        elTitulo.style.display = "inline";
+    }
+}
+
+async function empezarColibri() {
+    try {
+        detenerPruebaMicrofono();
+        cancelarTemporizadores();
+        cerrarPantallaColibri();
+        tituloCancionActual = "Colibrí";
+        cancionActual = "Colibri";
+        prepararPantallaJuegoColibri();
+        cambiarVelocidadColibri(0.7);
+        await cargarPiano();
+        await asegurarMicrofono("entrenamiento");
+
+        modoColibri = true;
+        aciertosColibri = 0;
+        reintentoIntervaloColibri = false;
+        guiaNotasColibri = true;
+        indiceIntervaloColibri = 0;
+        midiSuaveColibri = null;
+        actualizarBotonAyuda();
+        iniciarCalibracionColibri();
+        actualizarControlesColibri();
+
+        if (!bucleAudioActivo) {
+            bucleAudioActivo = true;
+            bucleDeAudio();
+        }
+    } catch (err) {
+        document.getElementById("status-box").style.display = "block";
+        document.getElementById("palabra-pantalla").innerText = "Error";
+        document.getElementById("evaluacion").innerHTML =
+            `<span class='error'>❌ Error: ${err.message}</span>`;
+        document.getElementById("zona-reinicio").style.display = "flex";
+        document.getElementById("btn-volver-colibri").hidden = false;
+    }
+}
+
+function reiniciarJuegoColibri() {
+    if (animacionColibriId) {
+        cancelAnimationFrame(animacionColibriId);
+        animacionColibriId = 0;
+    }
+    silenciarMelodia();
+    idGuia++;
+    aciertosColibri = 0;
+    reintentoIntervaloColibri = false;
+    guiaNotasColibri = true;
+    indiceIntervaloColibri = 0;
+    midiSuaveColibri = null;
+    florColibri = null;
+    floresSecuenciaColibri = [];
+    framesLibandoSecuenciaColibri = {};
+    pausaColibriEraSecuencia = false;
+    framesLibandoColibri = 0;
+    document.getElementById("zona-reinicio").style.display = "none";
+    document.getElementById("secuencia-visual").innerHTML = "";
+    const escenario = document.getElementById("escenario-colibri");
+    if (escenario) escenario.hidden = true;
+    iniciarCalibracionColibri();
+    actualizarControlesColibri();
+}
+
+function iniciarCalibracionColibri() {
+    estadoColibri = "calibracion";
+    muestrasCalibracion = [];
+    ponerGuiaSonando(false);
+    document.getElementById("btn-anterior").style.visibility = "hidden";
+    document.getElementById("btn-siguiente").style.visibility = "hidden";
+    document.getElementById("zona-reinicio").style.display = "none";
+    document.getElementById("escenario-colibri").hidden = true;
+    document.getElementById("palabra-pantalla").innerText = "🎤 Canta tu primera nota";
+    document.getElementById("secuencia-visual").innerHTML =
+        "<div style='font-size:16px; color:#aaa; line-height:1.5; max-width:420px;'>" +
+        "Elige una nota cómoda, ni muy grave ni muy aguda, y mantenla un momento. " +
+        "Después la oirás y saldrá la primera flor a esa altura.</div>";
+    document.getElementById("evaluacion").innerText = "Esperando tu voz...";
+    actualizarControlesColibri();
+}
+
+function procesarCalibracionColibri() {
+    if (!modoColibri || estadoColibri !== "calibracion") return;
+    const mensaje = document.getElementById("evaluacion");
+    analyser.getFloatTimeDomainData(dataArray);
+    const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
+
+    if (frecuencia === -1 || frecuencia < 60 || frecuencia > 1000) {
+        muestrasCalibracion = [];
+        return;
+    }
+
+    muestrasCalibracion.push(69 + 12 * Math.log2(frecuencia / 440));
+    if (muestrasCalibracion.length > MUESTRAS_CALIBRACION) muestrasCalibracion.shift();
+    if (muestrasCalibracion.length < MUESTRAS_CALIBRACION) {
+        mensaje.innerText = "Detectando tu nota...";
+        return;
+    }
+
+    const maximo = Math.max(...muestrasCalibracion);
+    const minimo = Math.min(...muestrasCalibracion);
+    if (maximo - minimo > 0.7) {
+        mensaje.innerText = "Mantén la nota estable...";
+        return;
+    }
+
+    const media = muestrasCalibracion.reduce((a, b) => a + b, 0) / muestrasCalibracion.length;
+    const notaMidi = Math.round(media);
+    const nombre = nombreEspanolDesdeMidi(notaMidi);
+
+    // Deja margen para llegar a la 5ª mayor (+7).
+    const midiMax = MIDI_MAX_PRIMERA_NOTA - 7;
+    if (notaMidi < MIDI_MIN_PRIMERA_NOTA || notaMidi > midiMax) {
+        mensaje.innerText =
+            `${nombre} queda fuera de rango. Prueba con una nota entre ` +
+            `${nombreEspanolDesdeMidi(MIDI_MIN_PRIMERA_NOTA)} y ${nombreEspanolDesdeMidi(midiMax)}.`;
+        muestrasCalibracion = [];
+        return;
+    }
+
+    muestrasCalibracion = [];
+    midiBaseColibri = notaMidi;
+    midiSuaveColibri = notaMidi;
+    estadoColibri = "prep";
+    mensaje.innerHTML = `<span class='success'>✔ Primera nota: ${nombre}. Escúchala…</span>`;
+    document.getElementById("secuencia-visual").innerHTML = "";
+    document.getElementById("palabra-pantalla").innerText = nombre;
+    actualizarControlesColibri();
+
+    ponerGuiaSonando(true);
+    sonarNota(nombreInglesDesdeMidi(notaMidi), 1.2, VOLUMEN_MELODIA_GUIA);
+    setTimeout(() => {
+        if (!modoColibri || estadoColibri !== "prep") return;
+        ponerGuiaSonando(false);
+        arrancarPartidaColibri();
+    }, 1500);
+}
+
+function arrancarPartidaColibri() {
+    if (!modoColibri) return;
+    indiceIntervaloColibri = 0;
+    aciertosColibri = 0;
+    reintentoIntervaloColibri = false;
+    guiaNotasColibri = true;
+    escenaMidiMinColibri = midiBaseColibri - 1;
+    escenaMidiMaxColibri = midiBaseColibri + 8;
+    document.getElementById("palabra-pantalla").innerText = "🌺";
+    document.getElementById("secuencia-visual").innerHTML = "";
+    const escenario = document.getElementById("escenario-colibri");
+    escenario.hidden = false;
+    const colibri = document.getElementById("colibri");
+    colibri.style.top = midiAPorcentajeColibri(midiBaseColibri) + "%";
+    colibri.classList.remove("cantando", "libando");
+    pintarLineasColibri();
+    actualizarMarcadorColibri();
+    actualizarEtiquetaIntervaloColibri();
+    lanzarFlorColibri();
+}
+
+function lanzarFlorColibri() {
+    if (!modoColibri) return;
+    const paso = INTERVALOS_COLIBRI[indiceIntervaloColibri];
+    if (!paso) {
+        terminarJuegoColibri();
+        return;
+    }
+    estadoColibri = "jugando";
+    framesLibandoColibri = 0;
+    const midi = midiBaseColibri + paso.semis;
+    const caja = document.getElementById("flores-colibri");
+    caja.innerHTML = "";
+    const el = document.createElement("div");
+    el.className = "flor-colibri";
+    const icono = document.createElement("span");
+    icono.className = "flor-icono";
+    icono.setAttribute("aria-hidden", "true");
+    icono.textContent = "🌺";
+    const etiqueta = document.createElement("span");
+    etiqueta.className = "flor-etiqueta";
+    etiqueta.textContent = paso.etiqueta;
+    el.appendChild(icono);
+    el.appendChild(etiqueta);
+    el.style.top = midiAPorcentajeColibri(midi) + "%";
+    el.style.left = COLIBRI_X_FLOR + "%";
+    caja.appendChild(el);
+
+    const colibri = document.getElementById("colibri");
+    if (colibri) colibri.style.left = COLIBRI_X_INICIO + "%";
+
+    florColibri = {
+        midi,
+        etiqueta: paso.etiqueta,
+        tLlegada: COLIBRI_ANTICIPO,
+        el,
+        libada: false,
+        escapada: false,
+        sonada: false
+    };
+    actualizarMarcadorColibri();
+    actualizarEtiquetaIntervaloColibri();
+    const etiquetaGuia = document.getElementById("etiqueta-intervalo-colibri");
+    if (etiquetaGuia && guiaNotasColibri) {
+        etiquetaGuia.textContent = `${paso.etiqueta} · con guía`;
+    }
+    document.getElementById("evaluacion").innerText = guiaNotasColibri
+        ? `Liba la flor · ${paso.etiqueta} (suena la nota del intervalo)`
+        : `Liba la flor · ${paso.etiqueta}`;
+    // Guía de las 9 primeras: la nota suena al aparecer la flor (no espera a libar).
+    if (guiaNotasColibri) {
+        florColibri.sonada = true;
+        sonarNota(nombreInglesDesdeMidi(midi), 0.9, VOLUMEN_MELODIA_GUIA);
+    }
+    relojColibri = { t0: performance.now(), tiempoBase: 0 };
+    actualizarControlesColibri();
+    if (animacionColibriId) cancelAnimationFrame(animacionColibriId);
+    animacionColibriId = requestAnimationFrame(bucleJuegoColibri);
+}
+
+function leerMidiVozColibri() {
+    if (!analyser || !dataArray || !audioContext) return null;
+    analyser.getFloatTimeDomainData(dataArray);
+    const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
+    if (frecuencia === -1 || frecuencia < 60 || frecuencia > 1000) return null;
+    return 69 + 12 * Math.log2(frecuencia / 440);
+}
+
+function bucleJuegoColibri() {
+    if (!modoColibri || estadoColibri !== "jugando") {
+        animacionColibriId = 0;
+        return;
+    }
+    const t = tiempoActualColibri();
+    const midiVoz = leerMidiVozColibri();
+    if (midiVoz != null) {
+        if (midiSuaveColibri == null) midiSuaveColibri = midiVoz;
+        else midiSuaveColibri = midiSuaveColibri * 0.72 + midiVoz * 0.28;
+    }
+    const flor = florColibri;
+    const colibri = document.getElementById("colibri");
+    if (colibri) {
+        if (flor && !flor.libada && !flor.escapada) {
+            colibri.style.left = xColibriHaciaFlor(t, flor.tLlegada) + "%";
+        }
+        if (midiSuaveColibri != null) {
+            colibri.style.top = midiAPorcentajeColibri(midiSuaveColibri) + "%";
+        }
+        colibri.classList.toggle("cantando", midiVoz != null);
+    }
+
+    if (!flor || flor.libada || flor.escapada) {
+        animacionColibriId = requestAnimationFrame(bucleJuegoColibri);
+        return;
+    }
+
+    flor.el.style.left = COLIBRI_X_FLOR + "%";
+    flor.el.style.top = midiAPorcentajeColibri(flor.midi) + "%";
+
+    const ventana = 0.28;
+    const cercaX = Math.abs(t - flor.tLlegada) <= ventana;
+    if (cercaX && midiSuaveColibri != null) {
+        const cents = (midiSuaveColibri - flor.midi) * 100;
+        if (Math.abs(cents) <= COLIBRI_MARGEN_CENTS) {
+            framesLibandoColibri++;
+            if (framesLibandoColibri >= COLIBRI_FRAMES_LIBAR) {
+                flor.libada = true;
+                flor.el.classList.add("libada");
+                if (!reintentoIntervaloColibri) aciertosColibri++;
+                if (colibri) {
+                    colibri.classList.add("libando");
+                    setTimeout(() => colibri.classList.remove("libando"), 220);
+                }
+                if (!guiaNotasColibri || !flor.sonada) {
+                    sonarNota(nombreInglesDesdeMidi(flor.midi), 0.55, VOLUMEN_MELODIA * 0.9);
+                    flor.sonada = true;
+                }
+                document.getElementById("evaluacion").innerHTML = reintentoIntervaloColibri
+                    ? `<span class="success">✔ ${flor.etiqueta} (reintento)</span>`
+                    : `<span class="success">✔ ${flor.etiqueta} · a la primera</span>`;
+                avanzarTrasLibarColibri();
+                return;
+            }
+        } else {
+            framesLibandoColibri = 0;
+        }
+    } else {
+        framesLibandoColibri = 0;
+    }
+
+    if (t > flor.tLlegada + ventana + 0.15) {
+        flor.escapada = true;
+        flor.el.classList.add("escapada");
+        reintentoIntervaloColibri = true;
+        document.getElementById("evaluacion").innerText =
+            `Se escapó · oye la base y la ${flor.etiqueta}`;
+        const midiIntervalo = flor.midi;
+        estadoColibri = "transicion";
+        actualizarControlesColibri();
+        // Primero la nota de base, luego la del intervalo escapado; después se reintenta.
+        sonarNota(nombreInglesDesdeMidi(midiBaseColibri), 0.7, VOLUMEN_MELODIA_GUIA * 0.85);
+        setTimeout(() => {
+            if (!modoColibri || estadoColibri !== "transicion") return;
+            sonarNota(nombreInglesDesdeMidi(midiIntervalo), 0.85, VOLUMEN_MELODIA_GUIA);
+            setTimeout(() => {
+                if (!modoColibri || estadoColibri !== "transicion") return;
+                silenciarMelodia();
+                estadoColibri = "jugando";
+                lanzarFlorColibri();
+            }, 950);
+        }, 800);
+        return;
+    }
+
+    animacionColibriId = requestAnimationFrame(bucleJuegoColibri);
+}
+
+function avanzarTrasLibarColibri() {
+    if (animacionColibriId) {
+        cancelAnimationFrame(animacionColibriId);
+        animacionColibriId = 0;
+    }
+    estadoColibri = "transicion";
+    actualizarControlesColibri();
+    const siguiente = indiceIntervaloColibri + 1;
+    if (siguiente >= INTERVALOS_COLIBRI.length) {
+        setTimeout(() => {
+            if (modoColibri) avisarFinGuiaIntervalosColibri();
+        }, 700);
+        return;
+    }
+    setTimeout(() => {
+        if (!modoColibri || estadoColibri !== "transicion") return;
+        indiceIntervaloColibri = siguiente;
+        reintentoIntervaloColibri = false;
+        // Breve recuerdo de la nota inicial antes de la siguiente flor.
+        sonarNota(nombreInglesDesdeMidi(midiBaseColibri), 0.7, VOLUMEN_MELODIA_GUIA * 0.85);
+        document.getElementById("evaluacion").innerText =
+            `Siguiente: ${INTERVALOS_COLIBRI[siguiente].etiqueta}`;
+        setTimeout(() => {
+            if (!modoColibri || estadoColibri !== "transicion") return;
+            silenciarMelodia();
+            lanzarFlorColibri();
+        }, 900);
+    }, 700);
+}
+
+function avisarFinGuiaIntervalosColibri() {
+    if (!modoColibri || estadoColibri === "fin" || estadoColibri === "secuencia") return;
+    if (animacionColibriId) {
+        cancelAnimationFrame(animacionColibriId);
+        animacionColibriId = 0;
+    }
+    estadoColibri = "aviso";
+    guiaNotasColibri = false;
+    actualizarControlesColibri();
+    ponerGuiaSonando(false);
+    silenciarMelodia();
+    const flores = document.getElementById("flores-colibri");
+    if (flores) flores.innerHTML = "";
+    document.getElementById("palabra-pantalla").innerText = "🌺";
+    document.getElementById("secuencia-visual").innerHTML =
+        "<div class='resumen-final'>" +
+        "<div class='resumen-titulo'>¡9 primeras conseguidas!</div>" +
+        "<div class='resumen-logro'>Las notas del intervalo dejan de sonar. Ahora canta tú la secuencia.</div>" +
+        "</div>";
+    document.getElementById("evaluacion").innerHTML =
+        "<span class='success'>Aviso · las notas del intervalo ya no suenan solas</span>";
+    const etiquetaEl = document.getElementById("etiqueta-intervalo-colibri");
+    if (etiquetaEl) etiquetaEl.textContent = "Sin notas guía";
+    setTimeout(() => {
+        if (!modoColibri || estadoColibri !== "aviso") return;
+        document.getElementById("secuencia-visual").innerHTML = "";
+        arrancarSecuenciaFinalColibri();
+    }, 3500);
+}
+
+function terminarJuegoColibri() {
+    if (!modoColibri || estadoColibri === "fin" || estadoColibri === "secuencia" || estadoColibri === "aviso") return;
+    if (animacionColibriId) {
+        cancelAnimationFrame(animacionColibriId);
+        animacionColibriId = 0;
+    }
+    ponerGuiaSonando(false);
+    silenciarMelodia();
+    avisarFinGuiaIntervalosColibri();
+}
+
+function arrancarSecuenciaFinalColibri() {
+    if (!modoColibri) return;
+    estadoColibri = "secuencia";
+    framesLibandoSecuenciaColibri = {};
+    pausaColibriEraSecuencia = false;
+    document.getElementById("palabra-pantalla").innerText = "🌺";
+    document.getElementById("secuencia-visual").innerHTML = "";
+    document.getElementById("zona-reinicio").style.display = "none";
+    document.getElementById("evaluacion").innerText =
+        "Secuencia · canta cada intervalo (como el pájaro)";
+    const etiquetaEl = document.getElementById("etiqueta-intervalo-colibri");
+    if (etiquetaEl) etiquetaEl.textContent = "Secuencia";
+    const escenario = document.getElementById("escenario-colibri");
+    if (escenario) escenario.hidden = false;
+
+    const gap = gapMusicalSecuenciaColibri();
+    const caja = document.getElementById("flores-colibri");
+    caja.innerHTML = "";
+    const tUltima = COLIBRI_ANTICIPO + (INTERVALOS_COLIBRI.length - 1) * gap;
+    floresSecuenciaColibri = INTERVALOS_COLIBRI.map((paso, i) => {
+        const midi = midiBaseColibri + paso.semis;
+        const tLlegada = COLIBRI_ANTICIPO + i * gap;
+        const el = document.createElement("div");
+        el.className = "flor-colibri";
+        const icono = document.createElement("span");
+        icono.className = "flor-icono";
+        icono.setAttribute("aria-hidden", "true");
+        icono.textContent = "🌺";
+        const etiqueta = document.createElement("span");
+        etiqueta.className = "flor-etiqueta";
+        etiqueta.textContent = paso.etiqueta;
+        el.appendChild(icono);
+        el.appendChild(etiqueta);
+        el.style.top = midiAPorcentajeColibri(midi) + "%";
+        el.style.left = xFlorFijaPorTiempo(tLlegada, tUltima) + "%";
+        caja.appendChild(el);
+        return {
+            midi,
+            etiqueta: paso.etiqueta,
+            tLlegada,
+            el,
+            libada: false,
+            escapada: false
+        };
+    });
+    const colibri = document.getElementById("colibri");
+    if (colibri) colibri.style.left = COLIBRI_X_INICIO + "%";
+    actualizarMarcadorSecuenciaColibri();
+    relojColibri = { t0: performance.now(), tiempoBase: 0 };
+    actualizarControlesColibri();
+    if (animacionColibriId) cancelAnimationFrame(animacionColibriId);
+    animacionColibriId = requestAnimationFrame(bucleSecuenciaFinalColibri);
+}
+
+function actualizarMarcadorSecuenciaColibri() {
+    const el = document.getElementById("marcador-colibri");
+    if (!el) return;
+    const hechas = floresSecuenciaColibri.filter(f => f.libada).length;
+    el.textContent = `${hechas} / ${INTERVALOS_COLIBRI.length}`;
+}
+
+function bucleSecuenciaFinalColibri() {
+    if (!modoColibri || estadoColibri !== "secuencia") {
+        animacionColibriId = 0;
+        return;
+    }
+    const t = tiempoActualColibri();
+    const midiVoz = leerMidiVozColibri();
+    if (midiVoz != null) {
+        if (midiSuaveColibri == null) midiSuaveColibri = midiVoz;
+        else midiSuaveColibri = midiSuaveColibri * 0.72 + midiVoz * 0.28;
+    }
+    const ultima = floresSecuenciaColibri[floresSecuenciaColibri.length - 1];
+    const tUltima = ultima ? ultima.tLlegada : COLIBRI_ANTICIPO;
+    const colibri = document.getElementById("colibri");
+    if (colibri) {
+        colibri.style.left = xColibriHaciaFlor(t, tUltima) + "%";
+        if (midiSuaveColibri != null) {
+            colibri.style.top = midiAPorcentajeColibri(midiSuaveColibri) + "%";
+        }
+        colibri.classList.toggle("cantando", midiVoz != null);
+    }
+
+    const ventana = 0.28;
+    floresSecuenciaColibri.forEach((flor, i) => {
+        if (flor.libada || flor.escapada) return;
+        flor.el.style.left = xFlorFijaPorTiempo(flor.tLlegada, tUltima) + "%";
+        flor.el.style.top = midiAPorcentajeColibri(flor.midi) + "%";
+
+        const cercaX = Math.abs(t - flor.tLlegada) <= ventana;
+        if (cercaX && midiSuaveColibri != null) {
+            const cents = (midiSuaveColibri - flor.midi) * 100;
+            if (Math.abs(cents) <= COLIBRI_MARGEN_CENTS) {
+                framesLibandoSecuenciaColibri[i] = (framesLibandoSecuenciaColibri[i] || 0) + 1;
+                if (framesLibandoSecuenciaColibri[i] >= COLIBRI_FRAMES_LIBAR) {
+                    flor.libada = true;
+                    flor.el.classList.add("libada");
+                    actualizarMarcadorSecuenciaColibri();
+                    // Como el pájaro: la nota solo suena al libar.
+                    sonarNota(nombreInglesDesdeMidi(flor.midi), 0.55, VOLUMEN_MELODIA * 0.9);
+                    if (colibri) {
+                        colibri.classList.add("libando");
+                        setTimeout(() => colibri.classList.remove("libando"), 220);
+                    }
+                    document.getElementById("evaluacion").innerHTML =
+                        `<span class="success">✔ ${flor.etiqueta}</span>`;
+                }
+            } else {
+                framesLibandoSecuenciaColibri[i] = 0;
+            }
+        } else {
+            framesLibandoSecuenciaColibri[i] = 0;
+        }
+
+        if (t > flor.tLlegada + ventana + 0.15) {
+            flor.escapada = true;
+            flor.el.classList.add("escapada");
+        }
+    });
+
+    if (ultima && t > ultima.tLlegada + 1.2) {
+        mostrarResumenFinalColibri();
+        return;
+    }
+    animacionColibriId = requestAnimationFrame(bucleSecuenciaFinalColibri);
+}
+
+function mostrarResumenFinalColibri() {
+    if (!modoColibri || estadoColibri === "fin") return;
+    estadoColibri = "fin";
+    if (animacionColibriId) {
+        cancelAnimationFrame(animacionColibriId);
+        animacionColibriId = 0;
+    }
+    silenciarMelodia();
+    const colibri = document.getElementById("colibri");
+    if (colibri) colibri.classList.remove("cantando", "libando");
+    const total = INTERVALOS_COLIBRI.length;
+    const libadasSecuencia = floresSecuenciaColibri.filter(f => f.libada).length;
+    document.getElementById("secuencia-visual").innerHTML = "";
+    const resumen = document.createElement("div");
+    resumen.className = "resumen-final";
+    resumen.innerHTML =
+        `<div class="resumen-logro">A la primera: ${aciertosColibri} de ${total}.</div>` +
+        `<div class="resumen-logro">Secuencia final: ${libadasSecuencia} de ${total}.</div>` +
+        `<div class="resumen-titulo">${aciertosColibri >= total
+            ? "¡Todas a la primera! El colibrí clavó cada intervalo."
+            : "Buen vuelo. Solo cuentan las flores libadas a la primera en la primera parte."}</div>`;
+    document.getElementById("secuencia-visual").appendChild(resumen);
+    document.getElementById("evaluacion").innerHTML = "";
+    anotarJuegoHoy("Colibrí", {
+        aciertos: aciertosColibri,
+        total,
+        secuencia: libadasSecuencia
+    });
+    document.getElementById("zona-reinicio").style.display = "flex";
+    actualizarControlesColibri();
     actualizarBotonAyuda();
 }
 
@@ -4254,12 +5077,18 @@ function regresarAlMenu() {
     if (btnRitmo) btnRitmo.hidden = true;
     const btnPajaro = document.getElementById("btn-volver-pajaro");
     if (btnPajaro) btnPajaro.hidden = true;
+    const btnColibri = document.getElementById("btn-volver-colibri");
+    if (btnColibri) btnColibri.hidden = true;
     const zonaRitmo = document.getElementById("zona-pulso-ritmo");
     if (zonaRitmo) zonaRitmo.hidden = true;
     const escenario = document.getElementById("escenario-pajaro");
     if (escenario) escenario.hidden = true;
+    const escenarioColibri = document.getElementById("escenario-colibri");
+    if (escenarioColibri) escenarioColibri.hidden = true;
     const contPajaro = document.getElementById("controles-pajaro");
     if (contPajaro) contPajaro.style.display = "none";
+    const contColibri = document.getElementById("controles-colibri");
+    if (contColibri) contColibri.style.display = "none";
     cerrarApartadosMenu();
     actualizarBotonAyuda();
 }
