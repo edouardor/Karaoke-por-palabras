@@ -255,6 +255,9 @@
             stroke-width: 2.5px;
             stroke-linejoin: round;
         }
+        .disco-simon .nota-simon.oculta {
+            visibility: hidden;
+        }
         .disco-simon .centro-simon-anillo {
             fill: #fff;
         }

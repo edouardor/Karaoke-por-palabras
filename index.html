@@ -160,6 +160,10 @@
                 <h4 class="titulo-juego-activo">Simon 🗣️</h4>
                 <label for="selector-simon" class="etiqueta-elige-ritmo">Elige una pieza:</label>
                 <select id="selector-simon"></select>
+                <label class="opcion-metronomo-ritmo">
+                    <input type="checkbox" id="check-simon-facil" checked onchange="alCambiarSimonFacil()">
+                    Fácil (solo se ven las notas del compás)
+                </label>
                 <p class="ayuda-ritmo">Escucha cada compás, pulsa los gajos en el mismo orden. Sin fallos, al final va toda la canción seguida. El centro «ayuda» te da la nota que toca. Aquí no hace falta cantar una nota de partida.</p>
                 <p id="estado-simon" class="ayuda-ritmo">Elige una pieza y pulsa Empezar.</p>
                 <div id="disco-simon" class="disco-simon" aria-hidden="false"></div>
@@ -338,6 +342,6 @@
 
     <!--cargamos el motor -->
     
-    <script src="./app.js?v=simon9"></script>
+    <script src="./app.js?v=simon10"></script>
 </body>
 </html>

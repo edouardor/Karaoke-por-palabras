@@ -1987,6 +1987,7 @@ function dibujarDiscoSimon() {
         texto.setAttribute("x", p.x.toFixed(2));
         texto.setAttribute("y", p.y.toFixed(2));
         texto.setAttribute("class", "nota-simon");
+        texto.dataset.indice = String(i);
         texto.setAttribute("text-anchor", "middle");
         texto.setAttribute("dominant-baseline", "middle");
         texto.setAttribute("pointer-events", "none");
@@ -2006,6 +2007,34 @@ function dibujarDiscoSimon() {
 
     caja.innerHTML = "";
     caja.appendChild(svg);
+    actualizarEtiquetasSimon(secuenciaSimon);
+}
+
+function simonModoFacil() {
+    const check = document.getElementById("check-simon-facil");
+    return !check || check.checked;
+}
+
+function actualizarEtiquetasSimon(notas) {
+    const textos = document.querySelectorAll("#disco-simon .nota-simon");
+    if (!textos.length) return;
+    if (!simonModoFacil()) {
+        textos.forEach(t => t.classList.remove("oculta"));
+        return;
+    }
+    const visibles = new Set();
+    (notas || []).forEach(n => {
+        if (typeof n.midi !== "number") return;
+        visibles.add(((n.midi % 12) + 12) % 12);
+    });
+    textos.forEach(t => {
+        const i = Number(t.dataset.indice);
+        t.classList.toggle("oculta", !visibles.has(i));
+    });
+}
+
+function alCambiarSimonFacil() {
+    actualizarEtiquetasSimon(secuenciaSimon);
 }
 
 let idSimon = 0;
@@ -2209,6 +2238,7 @@ function reproducirDemoSimon(frase) {
     faseSimon = "demo";
     pasoSimon = 0;
     secuenciaSimon = frase.slice();
+    actualizarEtiquetasSimon(secuenciaSimon);
     mensajeSimon(textoEscuchaSimon());
 
     if (!secuenciaSimon.length) return;
