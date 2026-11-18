@@ -1829,7 +1829,7 @@ function mostrarPantallaSimon() {
     document.getElementById("pantalla-simon").hidden = false;
     document.getElementById("botones-inicio").style.display = "none";
     detenerSimon();
-    dibujarDiscoSimon();
+    aplicarInstrumentoSimon();
     mensajeSimon("Elige una pieza y pulsa Empezar.");
     actualizarBotonAyuda();
 }
@@ -1866,9 +1866,9 @@ function empezarJuego(numero) {
 }
 
 // ==========================================
-// JUEGO 4: SIMON DICE — disco de 12 colores
+// JUEGO 4: SIMON DICE — disco o piano
 // ==========================================
-// Doce gajos exteriores (como el Chrome, pero con 12 en vez de 3) + centro azul.
+// Disco: 12 gajos. Piano: teclado de Mi bajo a Mi alto (2 octavas).
 const COLORES_SIMON = [
     "#ea4335", "#f4511e", "#fb8c00", "#fdd835",
     "#c0ca33", "#7cb342", "#43a047", "#00acc1",
@@ -1890,6 +1890,76 @@ const NOTAS_SIMON = [
     ["La#", "Si♭"],
     ["Si"]
 ];
+
+const SIMON_MIDI_MIN = 52; // Mi3
+const SIMON_MIDI_MAX = 76; // Mi5
+let instrumentoSimon = "disco"; // 'disco' | 'piano'
+
+function simonEsPiano() {
+    return instrumentoSimon === "piano";
+}
+
+function esNegraMidiSimon(midi) {
+    return [1, 3, 6, 8, 10].includes(((midi % 12) + 12) % 12);
+}
+
+// Desplaza toda la melodía el mismo intervalo (±12, ±24…) para que quepa
+// en Mi3–Mi5 sin romper saltos de octava entre notas vecinas.
+function desplazamientoTecladoSimon(midis) {
+    if (!midis.length) return 0;
+    const lo = Math.min(...midis);
+    const hi = Math.max(...midis);
+    const hueco = SIMON_MIDI_MAX - SIMON_MIDI_MIN;
+    let shift = 0;
+    if (lo < SIMON_MIDI_MIN) {
+        shift = Math.ceil((SIMON_MIDI_MIN - lo) / 12) * 12;
+    } else if (hi > SIMON_MIDI_MAX) {
+        shift = Math.floor((SIMON_MIDI_MAX - hi) / 12) * 12;
+    }
+    if (hi + shift > SIMON_MIDI_MAX) {
+        const bajar = Math.floor((SIMON_MIDI_MAX - hi) / 12) * 12;
+        if (lo + bajar >= SIMON_MIDI_MIN) shift = bajar;
+        else if (hi - lo <= hueco) shift = SIMON_MIDI_MAX - hi;
+    }
+    if (lo + shift < SIMON_MIDI_MIN) {
+        const subir = Math.ceil((SIMON_MIDI_MIN - lo) / 12) * 12;
+        if (hi + subir <= SIMON_MIDI_MAX) shift = subir;
+        else if (hi - lo <= hueco) shift = SIMON_MIDI_MIN - lo;
+    }
+    return shift;
+}
+
+function adaptarNotasAlTecladoSimon(notas) {
+    const shift = desplazamientoTecladoSimon(notas.map(n => n.midi));
+    if (!shift) return notas;
+    return notas.map(n => ({ ...n, midi: n.midi + shift }));
+}
+
+function etiquetaCortaSimon(midi) {
+    const lineas = NOTAS_SIMON[((midi % 12) + 12) % 12] || ["?"];
+    return lineas[0];
+}
+
+function instrumentoSimonElegido() {
+    const marcado = document.querySelector('input[name="instrumento-simon"]:checked');
+    return (marcado && marcado.value === "piano") ? "piano" : "disco";
+}
+
+function aplicarInstrumentoSimon() {
+    instrumentoSimon = instrumentoSimonElegido();
+    const disco = document.getElementById("disco-simon");
+    const zonaPiano = document.getElementById("zona-piano-simon");
+    if (disco) disco.hidden = simonEsPiano();
+    if (zonaPiano) zonaPiano.hidden = !simonEsPiano();
+    if (simonEsPiano()) dibujarTecladoSimon();
+    else dibujarDiscoSimon();
+    actualizarEtiquetasSimon(secuenciaSimon);
+    marcarEntradaSimonEsperando(faseSimon === "respuesta");
+}
+
+function alCambiarInstrumentoSimon() {
+    aplicarInstrumentoSimon();
+}
 
 function polarSimon(cx, cy, r, grados) {
     const rad = (grados - 90) * Math.PI / 180;
@@ -2010,26 +2080,99 @@ function dibujarDiscoSimon() {
     actualizarEtiquetasSimon(secuenciaSimon);
 }
 
+function blancasAntesSimon(midi) {
+    let n = 0;
+    for (let m = SIMON_MIDI_MIN; m < midi; m++) {
+        if (!esNegraMidiSimon(m)) n++;
+    }
+    return n;
+}
+
+function dibujarTecladoSimon() {
+    const caja = document.getElementById("teclado-simon");
+    if (!caja) return;
+    caja.innerHTML = "";
+
+    let totalBlancas = 0;
+    for (let m = SIMON_MIDI_MIN; m <= SIMON_MIDI_MAX; m++) {
+        if (!esNegraMidiSimon(m)) totalBlancas++;
+    }
+
+    const filaBlancas = document.createElement("div");
+    filaBlancas.className = "teclas-blancas";
+
+    for (let midi = SIMON_MIDI_MIN; midi <= SIMON_MIDI_MAX; midi++) {
+        if (esNegraMidiSimon(midi)) continue;
+        const tecla = document.createElement("button");
+        tecla.type = "button";
+        tecla.className = "tecla-simon tecla-simon-blanca";
+        tecla.dataset.midi = String(midi);
+        tecla.setAttribute("aria-label", etiquetaCortaSimon(midi));
+        const et = document.createElement("span");
+        et.className = "etiqueta-tecla-simon";
+        et.dataset.midi = String(midi);
+        et.textContent = etiquetaCortaSimon(midi);
+        tecla.appendChild(et);
+        tecla.addEventListener("click", () => alPulsarTeclaSimon(midi));
+        filaBlancas.appendChild(tecla);
+    }
+    caja.appendChild(filaBlancas);
+
+    for (let midi = SIMON_MIDI_MIN; midi <= SIMON_MIDI_MAX; midi++) {
+        if (!esNegraMidiSimon(midi)) continue;
+        const tecla = document.createElement("button");
+        tecla.type = "button";
+        tecla.className = "tecla-simon tecla-simon-negra";
+        tecla.dataset.midi = String(midi);
+        tecla.setAttribute("aria-label", etiquetaCortaSimon(midi));
+        const leftPct = (blancasAntesSimon(midi) / totalBlancas) * 100;
+        tecla.style.left = `${leftPct}%`;
+        const et = document.createElement("span");
+        et.className = "etiqueta-tecla-simon";
+        et.dataset.midi = String(midi);
+        et.textContent = etiquetaCortaSimon(midi);
+        tecla.appendChild(et);
+        tecla.addEventListener("click", () => alPulsarTeclaSimon(midi));
+        caja.appendChild(tecla);
+    }
+
+    actualizarEtiquetasSimon(secuenciaSimon);
+}
+
 function simonModoFacil() {
     const check = document.getElementById("check-simon-facil");
     return !check || check.checked;
 }
 
-function actualizarEtiquetasSimon(notas) {
-    const textos = document.querySelectorAll("#disco-simon .nota-simon");
-    if (!textos.length) return;
-    if (!simonModoFacil()) {
-        textos.forEach(t => t.classList.remove("oculta"));
-        return;
-    }
-    const visibles = new Set();
+function visiblesSimonDesdeNotas(notas) {
+    const pitch = new Set();
+    const midis = new Set();
     (notas || []).forEach(n => {
         if (typeof n.midi !== "number") return;
-        visibles.add(((n.midi % 12) + 12) % 12);
+        midis.add(n.midi);
+        pitch.add(((n.midi % 12) + 12) % 12);
     });
-    textos.forEach(t => {
-        const i = Number(t.dataset.indice);
-        t.classList.toggle("oculta", !visibles.has(i));
+    return { pitch, midis };
+}
+
+function actualizarEtiquetasSimon(notas) {
+    const { pitch, midis } = visiblesSimonDesdeNotas(notas);
+    const facil = simonModoFacil();
+
+    document.querySelectorAll("#disco-simon .nota-simon").forEach(t => {
+        if (!facil) {
+            t.classList.remove("oculta");
+            return;
+        }
+        t.classList.toggle("oculta", !pitch.has(Number(t.dataset.indice)));
+    });
+
+    document.querySelectorAll("#teclado-simon .etiqueta-tecla-simon").forEach(t => {
+        if (!facil) {
+            t.classList.remove("oculta");
+            return;
+        }
+        t.classList.toggle("oculta", !midis.has(Number(t.dataset.midi)));
     });
 }
 
@@ -2056,9 +2199,11 @@ function mensajeSimon(texto, clase) {
     if (clase) el.classList.add(clase);
 }
 
-function marcarDiscoSimonEsperando(activo) {
-    const caja = document.getElementById("disco-simon");
-    if (caja) caja.classList.toggle("simon-esperando", !!activo);
+function marcarEntradaSimonEsperando(activo) {
+    const disco = document.getElementById("disco-simon");
+    const teclado = document.getElementById("teclado-simon");
+    if (disco) disco.classList.toggle("simon-esperando", !!activo);
+    if (teclado) teclado.classList.toggle("simon-esperando", !!activo);
 }
 
 function apagarGajosSimon() {
@@ -2067,10 +2212,32 @@ function apagarGajosSimon() {
     });
 }
 
+function apagarTeclasSimon() {
+    document.querySelectorAll("#teclado-simon .tecla-simon.activo, #teclado-simon .tecla-simon.fallo").forEach(el => {
+        el.classList.remove("activo", "fallo");
+    });
+}
+
+function apagarEntradasSimon() {
+    apagarGajosSimon();
+    apagarTeclasSimon();
+}
+
 function iluminarGajoSimon(indice, clase = "activo") {
     apagarGajosSimon();
     const gajo = document.querySelector(`.gajo-simon[data-indice="${indice}"]`);
     if (gajo) gajo.classList.add(clase);
+}
+
+function iluminarTeclaSimon(midi, clase = "activo") {
+    apagarTeclasSimon();
+    const tecla = document.querySelector(`#teclado-simon .tecla-simon[data-midi="${midi}"]`);
+    if (tecla) tecla.classList.add(clase);
+}
+
+function iluminarSimonPorMidi(midi, clase = "activo") {
+    if (simonEsPiano()) iluminarTeclaSimon(midi, clase);
+    else iluminarGajoSimon(((midi % 12) + 12) % 12, clase);
 }
 
 function detenerSimon() {
@@ -2085,8 +2252,8 @@ function detenerSimon() {
     huboFalloSimon = false;
     modoCompletoSimon = false;
     trasFalloSimon = false;
-    marcarDiscoSimonEsperando(false);
-    apagarGajosSimon();
+    marcarEntradaSimonEsperando(false);
+    apagarEntradasSimon();
     silenciarMelodia();
 }
 
@@ -2103,15 +2270,14 @@ function alPulsarAyudaSimon() {
     asegurarAudioContext();
     if (audioContext.state === "suspended") audioContext.resume();
 
-    const indice = ((nota.midi % 12) + 12) % 12;
-    iluminarGajoSimon(indice);
+    iluminarSimonPorMidi(nota.midi);
     sonarNota(nombreInglesDesdeMidi(nota.midi), Math.min(nota.duracion || 0.75, 0.75), VOLUMEN_MELODIA_GUIA);
 
     const id = idSimon;
     const finLuz = Math.min(nota.duracion || 0.55, 0.55) * 1000;
     programarSimon(finLuz, () => {
         if (id !== idSimon) return;
-        if (faseSimon === "respuesta" || trasFalloSimon) apagarGajosSimon();
+        if (faseSimon === "respuesta" || trasFalloSimon) apagarEntradasSimon();
     }, id);
 }
 
@@ -2131,20 +2297,20 @@ function textoEscuchaSimon() {
 
 function abrirRespuestaSimon(id) {
     if (id !== idSimon) return;
-    apagarGajosSimon();
+    apagarEntradasSimon();
     trasFalloSimon = false;
     pasoSimon = 0;
     faseSimon = "respuesta";
-    marcarDiscoSimonEsperando(true);
+    marcarEntradaSimonEsperando(true);
     mensajeSimon(modoCompletoSimon
         ? "Pulsa toda la canción en el mismo orden"
-        : "Pulsa los gajos en el mismo orden");
+        : (simonEsPiano() ? "Pulsa las teclas en el mismo orden" : "Pulsa los gajos en el mismo orden"));
 }
 
 function alCompletarSecuenciaSimon(id) {
     if (id !== idSimon) return;
-    apagarGajosSimon();
-    marcarDiscoSimonEsperando(false);
+    apagarEntradasSimon();
+    marcarEntradaSimonEsperando(false);
 
     if (modoCompletoSimon) {
         faseSimon = "fin";
@@ -2182,6 +2348,14 @@ function alCompletarSecuenciaSimon(id) {
 }
 
 function alPulsarGajoSimon(indice) {
+    alResponderSimon({ pitchClass: indice, midiSonido: 60 + indice });
+}
+
+function alPulsarTeclaSimon(midi) {
+    alResponderSimon({ midi, midiSonido: midi });
+}
+
+function alResponderSimon(entrada) {
     if (faseSimon !== "respuesta") return;
     if (!secuenciaSimon.length || pasoSimon >= secuenciaSimon.length) return;
 
@@ -2189,16 +2363,20 @@ function alPulsarGajoSimon(indice) {
     if (audioContext.state === "suspended") audioContext.resume();
 
     const esperada = secuenciaSimon[pasoSimon];
-    const indiceEsperado = ((esperada.midi % 12) + 12) % 12;
     const durPulse = Math.min(esperada.duracion || 0.55, 0.55);
+    const ok = simonEsPiano()
+        ? entrada.midi === esperada.midi
+        : entrada.pitchClass === (((esperada.midi % 12) + 12) % 12);
+    const midiLuz = simonEsPiano() ? entrada.midi : (60 + entrada.pitchClass);
+    const midiSonido = entrada.midiSonido;
 
-    if (indice !== indiceEsperado) {
+    if (!ok) {
         huboFalloSimon = true;
         trasFalloSimon = true;
         faseSimon = "demo";
-        marcarDiscoSimonEsperando(false);
-        iluminarGajoSimon(indice, "fallo");
-        sonarNota(nombreInglesDesdeMidi(60 + indice), 0.35, VOLUMEN_MELODIA_GUIA * 0.7);
+        marcarEntradaSimonEsperando(false);
+        iluminarSimonPorMidi(midiLuz, "fallo");
+        sonarNota(nombreInglesDesdeMidi(midiSonido), 0.35, VOLUMEN_MELODIA_GUIA * 0.7);
         mensajeSimon("Incorrecto. Pulsa ayuda o escucha otra vez…", "simon-mal");
         const id = idSimon;
         programarSimon(1600, () => {
@@ -2209,13 +2387,13 @@ function alPulsarGajoSimon(indice) {
         return;
     }
 
-    iluminarGajoSimon(indice);
+    iluminarSimonPorMidi(esperada.midi);
     sonarNota(nombreInglesDesdeMidi(esperada.midi), esperada.duracion || 0.75, VOLUMEN_MELODIA_GUIA);
     pasoSimon++;
 
     if (pasoSimon >= secuenciaSimon.length) {
         faseSimon = "demo";
-        marcarDiscoSimonEsperando(false);
+        marcarEntradaSimonEsperando(false);
         const id = idSimon;
         programarSimon(durPulse * 1000, () => alCompletarSecuenciaSimon(id), id);
         return;
@@ -2224,7 +2402,7 @@ function alPulsarGajoSimon(indice) {
     const id = idSimon;
     programarSimon(durPulse * 1000, () => {
         if (id !== idSimon || faseSimon !== "respuesta") return;
-        apagarGajosSimon();
+        apagarEntradasSimon();
     }, id);
 }
 
@@ -2232,8 +2410,8 @@ function reproducirDemoSimon(frase) {
     const id = ++idSimon;
     temporizadoresSimon.forEach(clearTimeout);
     temporizadoresSimon = [];
-    apagarGajosSimon();
-    marcarDiscoSimonEsperando(false);
+    apagarEntradasSimon();
+    marcarEntradaSimonEsperando(false);
     trasFalloSimon = false;
     faseSimon = "demo";
     pasoSimon = 0;
@@ -2249,7 +2427,7 @@ function reproducirDemoSimon(frase) {
     secuenciaSimon.forEach(nota => {
         const cuando = retrasoInicio + (nota.tiempo - t0) * 1000;
         programarSimon(cuando, () => {
-            iluminarGajoSimon(((nota.midi % 12) + 12) % 12);
+            iluminarSimonPorMidi(nota.midi);
             sonarNota(nombreInglesDesdeMidi(nota.midi), nota.duracion, VOLUMEN_MELODIA_GUIA);
         }, id);
     });
@@ -2303,11 +2481,11 @@ function indiceCompasDeTiempoSimon(tiempo, firmas) {
 
 function armarCompasesSimon(notasRaw, datosNotas) {
     const firmas = firmasCompasDesdeDatos(datosNotas);
-    const notas = (notasRaw || []).map(n => ({
+    const notas = adaptarNotasAlTecladoSimon((notasRaw || []).map(n => ({
         midi: typeof n.midi === "number" ? n.midi : midiDesdeNombreIngles(n.name || n.note || "C4"),
         tiempo: typeof n.time === "number" ? n.time : 0,
         duracion: n.duration || 0.75
-    }));
+    })));
     const porCompas = new Map();
     notas.forEach(nota => {
         const idx = indiceCompasDeTiempoSimon(nota.tiempo, firmas);
@@ -2327,8 +2505,8 @@ async function empezarSimonConPieza() {
     const tokenCarga = ++idSimon;
     temporizadoresSimon.forEach(clearTimeout);
     temporizadoresSimon = [];
-    apagarGajosSimon();
-    marcarDiscoSimonEsperando(false);
+    apagarEntradasSimon();
+    marcarEntradaSimonEsperando(false);
     trasFalloSimon = false;
     faseSimon = "demo";
     pasoSimon = 0;

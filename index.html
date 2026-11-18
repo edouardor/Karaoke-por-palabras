@@ -164,9 +164,23 @@
                     <input type="checkbox" id="check-simon-facil" checked onchange="alCambiarSimonFacil()">
                     Fácil (solo se ven las notas del compás)
                 </label>
-                <p class="ayuda-ritmo">Escucha cada compás, pulsa los gajos en el mismo orden. Sin fallos, al final va toda la canción seguida. El centro «ayuda» te da la nota que toca. Aquí no hace falta cantar una nota de partida.</p>
+                <div class="opciones-instrumento-simon" role="radiogroup" aria-label="Instrumento Simon">
+                    <label class="opcion-instrumento-simon">
+                        <input type="radio" name="instrumento-simon" value="disco" checked onchange="alCambiarInstrumentoSimon()">
+                        Disco
+                    </label>
+                    <label class="opcion-instrumento-simon">
+                        <input type="radio" name="instrumento-simon" value="piano" onchange="alCambiarInstrumentoSimon()">
+                        Piano
+                    </label>
+                </div>
+                <p class="ayuda-ritmo">Escucha cada compás y repite el orden. Sin fallos, al final va toda la canción seguida. «ayuda» te da la nota que toca. Aquí no hace falta cantar una nota de partida.</p>
                 <p id="estado-simon" class="ayuda-ritmo">Elige una pieza y pulsa Empezar.</p>
                 <div id="disco-simon" class="disco-simon" aria-hidden="false"></div>
+                <div id="zona-piano-simon" class="zona-piano-simon" hidden>
+                    <div id="teclado-simon" class="teclado-simon" aria-label="Teclado Simon de Mi a Mi"></div>
+                    <button type="button" id="btn-ayuda-simon-piano" class="btn-ayuda-simon-piano" onclick="alPulsarAyudaSimon()">ayuda</button>
+                </div>
                 <div class="acciones-ritmo">
                     <button type="button" class="btn-empezar-ritmo" onclick="empezarSimonConPieza()">Empezar Simon ▶</button>
                     <button type="button" class="btn-volver-juegos" onclick="volverAListaJuegos()">← Juegos</button>
@@ -342,6 +356,6 @@
 
     <!--cargamos el motor -->
     
-    <script src="./app.js?v=simon10"></script>
+    <script src="./app.js?v=simon12"></script>
 </body>
 </html>

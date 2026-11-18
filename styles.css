@@ -199,11 +199,125 @@
             background: rgba(124, 77, 255, 0.15);
             border-color: #7c4dff;
         }
+        .opciones-instrumento-simon {
+            display: flex;
+            gap: 16px;
+            margin: 0 0 12px;
+            color: #eee;
+            font-size: 15px;
+        }
+        .opcion-instrumento-simon {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+        }
+        .opcion-instrumento-simon input {
+            accent-color: #1a73e8;
+        }
         .disco-simon {
             width: min(72vw, 320px);
             height: min(72vw, 320px);
             margin: 18px auto 20px;
             filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.35));
+        }
+        .zona-piano-simon {
+            width: min(96vw, 560px);
+            margin: 14px auto 8px;
+        }
+        .teclado-simon {
+            position: relative;
+            width: 100%;
+            height: min(28vw, 148px);
+            margin: 0 auto;
+            user-select: none;
+            touch-action: manipulation;
+        }
+        .teclado-simon .teclas-blancas {
+            display: flex;
+            height: 100%;
+            gap: 1px;
+        }
+        .teclado-simon .tecla-simon {
+            padding: 0;
+            margin: 0;
+            appearance: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+            transition: background 0.08s ease-out, filter 0.08s ease-out;
+        }
+        .teclado-simon:not(.simon-esperando) .tecla-simon {
+            cursor: default;
+        }
+        .teclado-simon .tecla-simon-blanca {
+            flex: 1;
+            position: relative;
+            background: #f2f2f2;
+            border: 1px solid #3a3a40;
+            border-radius: 0 0 5px 5px;
+            box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.12);
+        }
+        .teclado-simon .tecla-simon-negra {
+            position: absolute;
+            top: 0;
+            width: calc(100% / 15 * 0.62);
+            height: 58%;
+            background: #1c1c1f;
+            border: 1px solid #000;
+            border-radius: 0 0 3px 3px;
+            z-index: 2;
+            transform: translateX(-50%);
+            box-shadow: inset 0 -2px 0 rgba(255, 255, 255, 0.08);
+        }
+        .teclado-simon .etiqueta-tecla-simon {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 6px;
+            text-align: center;
+            font-family: "Segoe UI", system-ui, sans-serif;
+            font-size: 10px;
+            font-weight: 700;
+            line-height: 1.05;
+            pointer-events: none;
+            color: #222;
+        }
+        .teclado-simon .tecla-simon-negra .etiqueta-tecla-simon {
+            bottom: 4px;
+            color: #eee;
+            font-size: 8px;
+        }
+        .teclado-simon .etiqueta-tecla-simon.oculta {
+            visibility: hidden;
+        }
+        .teclado-simon .tecla-simon.activo.tecla-simon-blanca {
+            background: #ffe082;
+            filter: brightness(1.05);
+        }
+        .teclado-simon .tecla-simon.activo.tecla-simon-negra {
+            background: #f9a825;
+        }
+        .teclado-simon .tecla-simon.fallo.tecla-simon-blanca {
+            background: #ef9a9a;
+        }
+        .teclado-simon .tecla-simon.fallo.tecla-simon-negra {
+            background: #c62828;
+        }
+        .btn-ayuda-simon-piano {
+            display: block;
+            margin: 12px auto 8px;
+            min-width: 96px;
+            padding: 10px 18px;
+            border: none;
+            border-radius: 999px;
+            background: #1a73e8;
+            color: #fff;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .btn-ayuda-simon-piano:hover {
+            filter: brightness(1.08);
         }
         .disco-simon svg {
             display: block;
