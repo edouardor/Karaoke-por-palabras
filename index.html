@@ -27,7 +27,16 @@
             <li>Si vas <strong>agudo</strong>, aparece un triángulo hacia abajo encima de la celda. Si vas <strong>grave</strong>, uno hacia arriba debajo. Cuando entras en la zona aceptada, el triángulo desaparece.</li>
             <li>Si llevas más de 1 segundo intentando una nota, el borde se pone <strong>blanco</strong>. Púlsala: oirás la nota que estás cantando y, después, la que toca.</li>
             <li>Pulsa una celda para oír esa nota y repetir la palabra desde ahí. Las flechas (o las teclas ← y →) cambian de palabra.</li>
-            <li>En <strong>Cumpleaños Feliz</strong> cantas primero una nota cómoda y la melodía se coloca en esa tesitura.</li>
+            <li>En las piezas de <strong>prueba</strong> (<strong>Cumpleaños Feliz</strong>, <strong>Frère Jacques</strong>) cantas primero una nota cómoda y la melodía se coloca en esa tesitura.</li>
+            <li><strong>Juegos 🎲:</strong> hay cuatro. En cada uno, el botón <strong>Ayuda</strong> de arriba explica el detalle.
+                <ul>
+                    <li><strong>1 · Ritmo</strong> — pulsas a tiempo (sin micrófono) y mantienes la duración de cada nota.</li>
+                    <li><strong>2 · Colibrí</strong> — intervalos con la voz: flores una a una y luego la secuencia (con guía y sin guía).</li>
+                    <li><strong>3 · Pájaro</strong> — el pájaro sube y baja con tu tono y recoge cerezas a la altura de cada nota.</li>
+                    <li><strong>4 · Simon 🗣️</strong> — memoria melódica en disco o piano, compás a compás; sin fallos, al final la canción entera.</li>
+                </ul>
+            </li>
+            <li>En <strong>Canciones estudiadas hoy</strong> ves lo que has ensayado (piezas y juegos) durante el día.</li>
         </ol>
         <p class="ayuda-aviso">No te desanimes si no sale a la primera: es normal, y se puede repetir con calma las veces que haga falta. No fuerces la voz. Si notas tensión o cansancio, para, respira y vuelve a escuchar la melodía antes de cantar otra vez.</p>
         <button type="button" class="btn-ayuda-cerrar" onclick="cerrarAyuda()">Entendido</button>
@@ -75,6 +84,23 @@
             <li><strong>Luego:</strong> mensaje «Ahora canta sin las notas guía la secuencia» y se repiten esas 9 <strong>sin guía</strong> (la nota solo suena si libas).</li>
         </ol>
         <p class="ayuda-aviso">Con auriculares el micrófono oye mejor tu voz y no la guía del piano.</p>
+        <button type="button" class="btn-ayuda-cerrar" onclick="cerrarAyuda()">Entendido</button>
+    </dialog>
+
+    <dialog id="ayuda-simon" class="ayuda" onclick="if (event.target === this) cerrarAyuda()">
+        <h3>Ayuda Simon 🗣️</h3>
+        <ol>
+            <li><strong>De qué se trata:</strong> un juego de memoria melódica. Oyes un trozo de la pieza y lo repites pulsando el <strong>disco</strong> de 12 notas o el <strong>piano</strong> (de Mi bajo a Mi alto).</li>
+            <li><strong>Cómo se empieza:</strong> eliges una pieza y pulsas <strong>Empezar Simon</strong>. No hace falta cantar una nota de partida: se usan las notas de la partitura (en piano, la melodía entera se desplaza para caber en el teclado).</li>
+            <li><strong>Compás a compás:</strong> suena un compás (se iluminan gajos o teclas) y luego lo repites en el mismo orden. Si aciertas, pasa al siguiente.</li>
+            <li><strong>Fácil:</strong> con la casilla marcada (por defecto) solo se ven los nombres de las notas que suenan en ese compás. Si la quitas, se ven todas.</li>
+            <li><strong>Disco o piano:</strong> el disco usa las 12 alturas (Do, Do#, Re…). El piano distingue octavas: hay que pulsar la tecla correcta.</li>
+            <li><strong>ayuda</strong> (centro del disco o botón bajo el piano): en tu turno (o tras un fallo) ilumina y suena la nota que toca.</li>
+            <li><strong>Si fallas en un compás:</strong> puedes usar ayuda; luego se vuelve a oír ese compás entero.</li>
+            <li><strong>Sin fallos:</strong> al terminar todos los compases, suena la <strong>canción entera</strong> y hay que repetirla de seguido.</li>
+            <li><strong>Si fallas en la canción entera:</strong> se oye desde el principio <strong>hasta la nota correcta</strong> y luego puedes intentarlo otra vez.</li>
+        </ol>
+        <p class="ayuda-aviso">Escucha con atención el orden y el salto de octava en el piano. No hay micrófono: solo pulsas y oyes.</p>
         <button type="button" class="btn-ayuda-cerrar" onclick="cerrarAyuda()">Entendido</button>
     </dialog>
 
@@ -356,6 +382,6 @@
 
     <!--cargamos el motor -->
     
-    <script src="./app.js?v=simon12"></script>
+    <script src="./app.js?v=simon15"></script>
 </body>
 </html>

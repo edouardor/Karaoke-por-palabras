@@ -222,16 +222,26 @@ function enAyudaColibri() {
     return document.body.classList.contains("vista-colibri") || !!modoColibri;
 }
 
+function enAyudaSimon() {
+    return document.body.classList.contains("vista-simon");
+}
+
 function actualizarBotonAyuda() {
     const btn = document.getElementById("btn-ayuda");
     if (!btn) return;
-    if (enAyudaColibri()) btn.textContent = "Ayuda colibrí ❓";
+    if (enAyudaSimon()) btn.textContent = "Ayuda Simon ❓";
+    else if (enAyudaColibri()) btn.textContent = "Ayuda colibrí ❓";
     else if (enAyudaPajaro()) btn.textContent = "Ayuda pájaro ❓";
     else if (enAyudaRitmo()) btn.textContent = "Ayuda ritmo ❓";
     else btn.textContent = "Ayuda ❓";
 }
 
 function abrirAyuda() {
+    if (enAyudaSimon()) {
+        const dialogo = document.getElementById("ayuda-simon");
+        if (dialogo) dialogo.showModal();
+        return;
+    }
     if (enAyudaColibri()) {
         const dialogo = document.getElementById("ayuda-colibri");
         if (dialogo) dialogo.showModal();
@@ -255,10 +265,12 @@ function cerrarAyuda() {
     const ritmo = document.getElementById("ayuda-ritmo");
     const pajaro = document.getElementById("ayuda-pajaro");
     const colibri = document.getElementById("ayuda-colibri");
+    const simon = document.getElementById("ayuda-simon");
     if (general && general.open) general.close();
     if (ritmo && ritmo.open) ritmo.close();
     if (pajaro && pajaro.open) pajaro.close();
     if (colibri && colibri.open) colibri.close();
+    if (simon && simon.open) simon.close();
 }
 
 // El margen del menú (15, 30, 45 o 60 cents) es el que usa el entrenamiento y el karaoke.
@@ -2377,13 +2389,23 @@ function alResponderSimon(entrada) {
         marcarEntradaSimonEsperando(false);
         iluminarSimonPorMidi(midiLuz, "fallo");
         sonarNota(nombreInglesDesdeMidi(midiSonido), 0.35, VOLUMEN_MELODIA_GUIA * 0.7);
-        mensajeSimon("Incorrecto. Pulsa ayuda o escucha otra vez…", "simon-mal");
+        const indiceError = pasoSimon;
         const id = idSimon;
-        programarSimon(1600, () => {
-            if (id !== idSimon) return;
-            trasFalloSimon = false;
-            reproducirDemoSimon(secuenciaSimon);
-        }, id);
+        if (modoCompletoSimon) {
+            mensajeSimon("Incorrecto. Escucha hasta la nota buena…", "simon-mal");
+            programarSimon(900, () => {
+                if (id !== idSimon) return;
+                trasFalloSimon = false;
+                reproducirHastaNotaSimon(secuenciaSimon, indiceError);
+            }, id);
+        } else {
+            mensajeSimon("Incorrecto. Pulsa ayuda o escucha otra vez…", "simon-mal");
+            programarSimon(1600, () => {
+                if (id !== idSimon) return;
+                trasFalloSimon = false;
+                reproducirDemoSimon(secuenciaSimon);
+            }, id);
+        }
         return;
     }
 
@@ -2406,6 +2428,29 @@ function alResponderSimon(entrada) {
     }, id);
 }
 
+function programarNotasDemoSimon(notas, id, alTerminar) {
+    if (!notas.length) {
+        if (alTerminar) alTerminar();
+        return;
+    }
+    const t0 = notas[0].tiempo;
+    const retrasoInicio = 280;
+    notas.forEach((nota, i) => {
+        const cuando = retrasoInicio + (nota.tiempo - t0) * 1000;
+        const esUltima = i === notas.length - 1;
+        programarSimon(cuando, () => {
+            iluminarSimonPorMidi(nota.midi);
+            const dur = esUltima ? Math.max(nota.duracion || 0.75, 0.9) : nota.duracion;
+            sonarNota(nombreInglesDesdeMidi(nota.midi), dur, VOLUMEN_MELODIA_GUIA);
+        }, id);
+    });
+    const ultima = notas[notas.length - 1];
+    const finMs = retrasoInicio + (ultima.tiempo - t0 + Math.max(ultima.duracion || 0.75, 0.9)) * 1000 + 220;
+    programarSimon(finMs, () => {
+        if (typeof alTerminar === "function") alTerminar();
+    }, id);
+}
+
 function reproducirDemoSimon(frase) {
     const id = ++idSimon;
     temporizadoresSimon.forEach(clearTimeout);
@@ -2418,23 +2463,30 @@ function reproducirDemoSimon(frase) {
     secuenciaSimon = frase.slice();
     actualizarEtiquetasSimon(secuenciaSimon);
     mensajeSimon(textoEscuchaSimon());
+    programarNotasDemoSimon(secuenciaSimon, id, () => abrirRespuestaSimon(id));
+}
 
-    if (!secuenciaSimon.length) return;
+// Tras un fallo en la canción entera: oye desde el inicio hasta la nota correcta.
+function reproducirHastaNotaSimon(fraseCompleta, indiceUltima) {
+    const id = ++idSimon;
+    temporizadoresSimon.forEach(clearTimeout);
+    temporizadoresSimon = [];
+    apagarEntradasSimon();
+    marcarEntradaSimonEsperando(false);
+    trasFalloSimon = false;
+    faseSimon = "demo";
+    pasoSimon = 0;
+    secuenciaSimon = fraseCompleta.slice();
+    const hasta = Math.max(0, Math.min(indiceUltima, secuenciaSimon.length - 1));
+    const fragmento = secuenciaSimon.slice(0, hasta + 1);
+    actualizarEtiquetasSimon(secuenciaSimon);
+    mensajeSimon("Escucha hasta la nota correcta…");
 
-    const t0 = secuenciaSimon[0].tiempo;
-    const retrasoInicio = 280;
-
-    secuenciaSimon.forEach(nota => {
-        const cuando = retrasoInicio + (nota.tiempo - t0) * 1000;
-        programarSimon(cuando, () => {
-            iluminarSimonPorMidi(nota.midi);
-            sonarNota(nombreInglesDesdeMidi(nota.midi), nota.duracion, VOLUMEN_MELODIA_GUIA);
-        }, id);
+    programarNotasDemoSimon(fragmento, id, () => {
+        if (id !== idSimon) return;
+        mensajeSimon("Esa era la nota buena. Prueba otra vez la canción entera…", "simon-ok");
+        programarSimon(700, () => abrirRespuestaSimon(id), id);
     });
-
-    const ultima = secuenciaSimon[secuenciaSimon.length - 1];
-    const finMs = retrasoInicio + (ultima.tiempo - t0 + ultima.duracion) * 1000 + 180;
-    programarSimon(finMs, () => abrirRespuestaSimon(id), id);
 }
 
 function firmasCompasDesdeDatos(datosNotas) {
