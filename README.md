@@ -13,9 +13,9 @@ The interface is in Spanish.
 - Three practice modes: listen only, guided training, or continuous karaoke.
 - Optional **Solo / Choir** karaoke when a piece has other voices (canon or staggered entries).
 - Warm-up exercises before singing the songs.
-- **Games** under **Juegos**: Rhythm (timing) and Bird (pitch), with scores logged in “songs studied today”.
+- **Games** under **Juegos**: Rhythm (timing), Hummingbird (intervals), Bird (pitch), and Simon Says (melody memory), with scores logged in “songs studied today” where applicable.
 - Piano samples for the melody (and choir voices when Coro is on).
-- Test pieces with free starting pitch: **Cumpleaños Feliz** and **Frère Jacques**.
+- Test pieces with free starting pitch: **Cumpleaños Feliz** and **Frère Jacques** (not required in Simon Says).
 
 ## How to use
 
@@ -49,7 +49,16 @@ Tap along with a piece **without the microphone**: only attack timing and hold d
 - Tempo changes such as ritardandos are ignored in Rhythm so the click stays steady.
 - At the end you see % good for **moment** and **duration**; the run is added to today’s activity log.
 
-#### 2 — Bird
+#### 2 — Hummingbird (Colibrí)
+
+Practice **intervals** with your voice. You sing a comfortable base note first; the game uses that pitch as “unison”.
+
+- Nine flowers one by one (unison → major 2nd → major 3rd → perfect 4th → perfect 5th, then back down to unison). Only **first-try** sips count toward the score.
+- Escape (or the on-screen control) plays the base note and then the target interval so you can hear it.
+- After the nine flowers: a **guided** sequence of the same intervals (guide notes sound shortly before you reach each flower), then a message, then the **same sequence without** guide notes.
+- Score goes into today’s activity log.
+
+#### 3 — Bird
 
 A bird moves up and down with your **sung pitch** and must catch cherries placed at each note height. Syllables appear under the cherries.
 
@@ -57,6 +66,16 @@ A bird moves up and down with your **sung pitch** and must catch cherries placed
 - Cherries move from the right; the note sounds only when you catch a cherry.
 - Starts at **×0.6** speed; pause, resume, and replay like Rhythm.
 - Score (cherries caught) goes into today’s activity log.
+
+#### 4 — Simon Says (Simon 🗣️)
+
+Memory game on a **12-note chromatic disk** (Chrome-logo style) or a **piano** from low E to high E (two octaves). No sung starting note is required: the written pitches are used as-is (shifted as a whole so they fit the piano).
+
+- Choose any piece from the shared song list.
+- The melody is shown **measure by measure**: listen (pads/keys light up), then tap the same sequence.
+- **Fácil** (on by default): only the note names that appear in the current measure are shown.
+- Center **ayuda** on the disk (or the button under the piano) plays and highlights the next expected note (or the correct one after a mistake).
+- A wrong tap replays that measure. If you finish every measure with **no mistakes**, you get a final round with the **whole song** in one go.
 
 ### Tips
 
@@ -81,7 +100,7 @@ Then open `http://127.0.0.1:8765/`.
 | --- | --- |
 | `index.html` | UI |
 | `app.js` | Pitch detection, modes, games, piano/choir playback |
-| `styles.css` | Layout, note cells, Rhythm and Bird screens |
+| `styles.css` | Layout, note cells, and game screens (Rhythm, Hummingbird, Bird, Simon) |
 | `canciones/` | Song JSON (melody) + lyric JSON; some pieces also have a `* coro.json` |
 | `imagenes/` | Game icons (e.g. snare for Rhythm) |
 | `sonidos/piano/` | Acoustic piano samples |
