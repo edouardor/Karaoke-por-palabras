@@ -436,33 +436,50 @@ function hzANombreEspanol(frecuenciaHz) {
     return traducciones[nombresIngles[notaMidi % 12]] || "...";
 }
 
-function autoCorrelacion(buffer, sampleRate) {
-    let SIZE = buffer.length; let rrms = 0;
-    for (let i = 0; i < SIZE; i++) { rrms += buffer[i] * buffer[i]; }
-    rrms = Math.sqrt(rrms / SIZE);
-    if (rrms < 0.02) return -1;
+// Detección de tono con Pitchy (McLeod Pitch Method), en vanilla JS.
+let PitchDetectorCls = null;
+let detectorPitchy = null;
+let bufferPitchy = null;
+let cargaPitchy = null;
+const CLARIDAD_PITCHY_MIN = 0.85;
 
-    let r1 = 0, r2 = SIZE - 1, thres = 0.2;
-    for (let i = 0; i < SIZE / 2; i++) { if (Math.abs(buffer[i]) < thres) { r1 = i; break; } }
-    for (let i = SIZE - 1; i >= SIZE / 2; i--) { if (Math.abs(buffer[i]) < thres) { r2 = i; break; } }
-    buffer = buffer.slice(r1, r2); SIZE = buffer.length;
-    if (SIZE < 8) return -1;
-
-    let c = new Float32Array(SIZE);
-    for (let i = 0; i < SIZE; i++) {
-        for (let j = 0; j < SIZE - i; j++) { c[i] = c[i] + buffer[j] * buffer[j + i]; }
+async function cargarPitchy() {
+    if (PitchDetectorCls) return PitchDetectorCls;
+    if (!cargaPitchy) {
+        cargaPitchy = import("./vendor/pitchy.mjs")
+            .then(mod => {
+                PitchDetectorCls = mod.PitchDetector;
+                return PitchDetectorCls;
+            })
+            .catch(err => {
+                console.warn("No se pudo cargar Pitchy:", err);
+                cargaPitchy = null;
+                throw err;
+            });
     }
-    let d = 0; while (d < SIZE - 1 && c[d] > c[d + 1]) d++;
-    let maxval = -1, maxpos = -1;
-    for (let i = d; i < SIZE; i++) { if (c[i] > maxval) { maxval = c[i]; maxpos = i; } }
-    // Sin un pico periódico claro es ruido de fondo, no una nota cantada.
-    if (maxpos < 2 || maxpos >= SIZE - 1 || !(c[0] > 0) || maxval / c[0] < 0.35) return -1;
-    let T0 = maxpos;
-    let x1 = c[T0 - 1], x2 = c[T0], x3 = c[T0 + 1];
-    let a = (x1 + x3 - 2 * x2) / 2; let b = (x3 - x1) / 2;
-    if (a) T0 = T0 - b / (2 * a);
-    const frecuencia = sampleRate / T0;
-    return Number.isFinite(frecuencia) ? frecuencia : -1;
+    return cargaPitchy;
+}
+
+async function asegurarDetectorPitchy() {
+    const Cls = await cargarPitchy();
+    if (!analyser || !Cls) return false;
+    const len = analyser.fftSize;
+    if (!detectorPitchy || detectorPitchy.inputLength !== len) {
+        detectorPitchy = Cls.forFloat32Array(len);
+        bufferPitchy = new Float32Array(detectorPitchy.inputLength);
+        detectorPitchy.clarityThreshold = 0.9;
+        detectorPitchy.minVolumeAbsolute = 0.015;
+    }
+    return true;
+}
+
+function detectarFrecuenciaVoz() {
+    if (!analyser || !audioContext || !detectorPitchy || !bufferPitchy) return -1;
+    analyser.getFloatTimeDomainData(bufferPitchy);
+    const [hz, claridad] = detectorPitchy.findPitch(bufferPitchy, audioContext.sampleRate);
+    if (!Number.isFinite(hz) || hz <= 0) return -1;
+    if (!(claridad >= CLARIDAD_PITCHY_MIN)) return -1;
+    return hz;
 }
 // Varias formas de pedir el mismo archivo: con ñ/tildes en NFC o NFD, y con el
 // nombre escapado. Si una petición se corta ("Failed to fetch"), se prueba la siguiente.
@@ -1230,8 +1247,7 @@ function bucleDeAudio() {
         return;
     }
 
-    analyser.getFloatTimeDomainData(dataArray);
-    const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
+    const frecuencia = detectarFrecuenciaVoz();
 
     if (frecuencia === -1 || frecuencia <= 60 || frecuencia >= 1000) {
         ultimaNotaValidadaTexto = "";
@@ -1336,8 +1352,7 @@ function iniciarCalibracion() {
 
 function procesarCalibracion() {
     const mensaje = document.getElementById('evaluacion');
-    analyser.getFloatTimeDomainData(dataArray);
-    const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
+    const frecuencia = detectarFrecuenciaVoz();
 
     if (frecuencia === -1 || frecuencia < 60 || frecuencia > 1000) {
         muestrasCalibracion = [];
@@ -1434,7 +1449,10 @@ async function actualizarOpcionCoro() {
         caja.hidden = true;
     }
 }
-document.addEventListener('DOMContentLoaded', alCambiarCancion);
+document.addEventListener('DOMContentLoaded', () => {
+    alCambiarCancion();
+    cargarPitchy().catch(() => {});
+});
 
 // ==========================================
 // AUDIO: CONTEXTO Y MICRÓFONO
@@ -1586,6 +1604,7 @@ function conectarMicrofono(stream, modo) {
     source.connect(gananciaMicrofono);
     gananciaMicrofono.connect(analyser);
     sincronizarAltavozConMicrofono();
+    asegurarDetectorPitchy().catch(() => {});
 }
 
 function soltarMicrofono() {
@@ -3584,8 +3603,7 @@ function iniciarCalibracionPajaro() {
 function procesarCalibracionPajaro() {
     if (!modoPajaro || estadoPajaro !== "calibracion") return;
     const mensaje = document.getElementById("evaluacion");
-    analyser.getFloatTimeDomainData(dataArray);
-    const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
+    const frecuencia = detectarFrecuenciaVoz();
 
     if (frecuencia === -1 || frecuencia < 60 || frecuencia > 1000) {
         muestrasCalibracion = [];
@@ -3691,9 +3709,8 @@ function arrancarPartidaPajaro() {
 }
 
 function leerMidiVozPajaro() {
-    if (!analyser || !dataArray || !audioContext) return null;
-    analyser.getFloatTimeDomainData(dataArray);
-    const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
+    if (!analyser || !audioContext || !detectorPitchy) return null;
+    const frecuencia = detectarFrecuenciaVoz();
     if (frecuencia === -1 || frecuencia < 60 || frecuencia > 1000) return null;
     return 69 + 12 * Math.log2(frecuencia / 440);
 }
@@ -4061,8 +4078,7 @@ function iniciarCalibracionColibri() {
 function procesarCalibracionColibri() {
     if (!modoColibri || estadoColibri !== "calibracion") return;
     const mensaje = document.getElementById("evaluacion");
-    analyser.getFloatTimeDomainData(dataArray);
-    const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
+    const frecuencia = detectarFrecuenciaVoz();
 
     if (frecuencia === -1 || frecuencia < 60 || frecuencia > 1000) {
         muestrasCalibracion = [];
@@ -4197,9 +4213,8 @@ function lanzarFlorColibri() {
 }
 
 function leerMidiVozColibri() {
-    if (!analyser || !dataArray || !audioContext) return null;
-    analyser.getFloatTimeDomainData(dataArray);
-    const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
+    if (!analyser || !audioContext || !detectorPitchy) return null;
+    const frecuencia = detectarFrecuenciaVoz();
     if (frecuencia === -1 || frecuencia < 60 || frecuencia > 1000) return null;
     return 69 + 12 * Math.log2(frecuencia / 440);
 }
@@ -4607,7 +4622,7 @@ function buclePruebaMicro(id) {
     const texto = document.getElementById("texto-micro");
     if (rms >= 0.01) {
         microYaOido = true;
-        const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
+        const frecuencia = detectarFrecuenciaVoz();
         let nota = "";
         if (frecuencia > 60 && frecuencia < 1000) {
             const midi = Math.round(69 + 12 * Math.log2(frecuencia / 440));
@@ -5818,8 +5833,7 @@ function procesarKaraoke() {
 
     const nota = notaEnJuicio;
     const ignorarOctava = esCalentamiento(cancionActual);
-    analyser.getFloatTimeDomainData(dataArray);
-    const frecuencia = autoCorrelacion(dataArray, audioContext.sampleRate);
+    const frecuencia = detectarFrecuenciaVoz();
     const caja = document.getElementById(`caja-nota-${nota.notaIndex}`);
 
     if (frecuencia === -1 || frecuencia <= (ignorarOctava ? 50 : 60) || frecuencia >= (ignorarOctava ? 2000 : 1000)) {

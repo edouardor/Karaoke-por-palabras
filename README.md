@@ -9,7 +9,7 @@ The interface is in Spanish.
 ## What it is
 
 - Word-by-word practice for Christmas and choir repertoire (bass part).
-- Pitch checking in real time (humming or singing the note name also works).
+- Pitch checking in real time with **Pitchy** (McLeod Pitch Method) in vanilla JS; humming or singing the note name also works.
 - Three practice modes: listen only, guided training, or continuous karaoke.
 - Optional **Solo / Choir** karaoke when a piece has other voices (canon or staggered entries).
 - Warm-up exercises before singing the songs.
@@ -99,8 +99,9 @@ Then open `http://127.0.0.1:8765/`.
 | Path | Role |
 | --- | --- |
 | `index.html` | UI |
-| `app.js` | Pitch detection, modes, games, piano/choir playback |
+| `app.js` | Pitch detection (Pitchy), modes, games, piano/choir playback |
 | `styles.css` | Layout, note cells, and game screens (Rhythm, Hummingbird, Bird, Simon) |
+| `vendor/` | Pitchy (+ `fft.js`) as local ES modules for mic pitch detection |
 | `canciones/` | Song JSON (melody) + lyric JSON; some pieces also have a `* coro.json` |
 | `imagenes/` | Game icons (e.g. snare for Rhythm) |
 | `sonidos/piano/` | Acoustic piano samples |
